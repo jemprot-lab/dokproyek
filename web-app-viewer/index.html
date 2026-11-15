@@ -69,7 +69,7 @@
     <!-- Body Layout -->
     <div class="flex-1 flex flex-col md:flex-row">
       <!-- Sidebar Proyek -->
-      <aside class="w-full md:w-80 bg-white border-r border-slate-200 p-4 space-y-3 no-print">
+      <aside id="project-sidebar" class="hidden md:block w-full md:w-80 bg-white border-r border-slate-200 p-4 space-y-3 no-print">
         <!-- Indikator Kuota Penyimpanan -->
         <div id="storage-quota-card" class="hidden p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
           <div class="text-xs font-bold text-slate-700">💾 Penyimpanan Cloud</div>
@@ -95,7 +95,10 @@
       <!-- Main Gallery Area -->
       <main class="flex-1 p-4 pb-28">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <h2 id="gallery-header-title" class="text-lg font-bold text-slate-900">Pilih Proyek & Tanggal</h2>
+          <div class="flex items-center gap-2">
+            <button onclick="App.toggleMobileSidebar()" class="md:hidden px-3 py-2 text-xs font-bold rounded-xl bg-slate-900 text-white">📂 Proyek</button>
+            <h2 id="gallery-header-title" class="text-lg font-bold text-slate-900">Pilih Proyek & Tanggal</h2>
+          </div>
           <div class="flex flex-wrap items-center gap-2">
             <button id="btn-select-all" onclick="App.toggleSelectAll()" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:bg-slate-100">☑️ Pilih Semua</button>
             <button id="btn-filter-star" onclick="App.toggleStarFilter()" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:bg-amber-50">⭐ Hanya Favorit</button>
@@ -285,6 +288,23 @@
             <tbody id="users-tbody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= POPUP PERINGATAN KUOTA / MASA AKTIF ================= -->
+  <div id="storage-warning-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 no-print">
+    <div class="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-amber-300">
+      <div class="px-5 py-4 bg-amber-500 text-slate-900 font-bold text-base flex items-center gap-2">
+        <span>⚠️ Peringatan Sistem Cloud</span>
+      </div>
+      <div class="p-5 space-y-3 text-sm text-slate-700">
+        <p id="storage-warning-message" class="leading-relaxed font-medium"></p>
+        <p class="text-xs text-slate-500">Aplikasi tetap dapat digunakan seperti biasa. Tekan <b>OK</b> untuk melanjutkan.</p>
+      </div>
+      <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+        <a id="storage-warning-wa" href="#" target="_blank" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">📲 Hubungi Penyedia</a>
+        <button onclick="App.closeStorageWarningModal()" class="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold">OK</button>
       </div>
     </div>
   </div>

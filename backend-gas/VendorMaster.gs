@@ -294,11 +294,13 @@ function checkTenantQuotaAndBilling(additionalBytes) {
   }
 
   var pct = t.Quota_Limit_GB > 0 ? Math.round((t.Used_Storage_GB / t.Quota_Limit_GB) * 100) : 0;
+  var daysLeft = dueObj ? Math.ceil((dueObj.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
   return {
     allowed: true,
     usedGb: t.Used_Storage_GB,
     limitGb: t.Quota_Limit_GB,
     percent: pct,
+    daysLeft: daysLeft,
     billingDueDate: t.Billing_Due_Date,
     subscriptionStatus: t.Subscription_Status,
     vendorContactWa: CONFIG.VENDOR_CONTACT_WA

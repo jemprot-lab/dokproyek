@@ -111,6 +111,44 @@ const App = {
     } else {
       banner.classList.add('hidden');
     }
+
+    const nearExpiry = typeof s.daysLeft === 'number' && s.daysLeft <= 7;
+    const nearFull = !s.allowed || pct >= 85;
+    if ((nearFull || nearExpiry) && !sessionStorage.getItem('dokproyek_warn_dismissed')) {
+      const reasons = [];
+      if (!s.allowed || pct >= 100) {
+        reasons.push(s.message || `Kapasitas penyimpanan penuh (${Number(s.usedGb).toFixed(2)} GB / ${s.limitGb} GB).`);
+      } else if (pct >= 85) {
+        reasons.push(`Kapasitas penyimpanan hampir habis: ${Number(s.usedGb).toFixed(2)} GB / ${s.limitGb} GB (${pct}%).`);
+      }
+      if (nearExpiry) {
+        if (s.daysLeft < 0) {
+          reasons.push(`Masa aktif Cloud Server sudah melewati jatuh tempo (${dueFormatted || s.billingDueDate}).`);
+        } else if (s.daysLeft === 0) {
+          reasons.push(`Masa aktif Cloud Server jatuh tempo hari ini (${dueFormatted || s.billingDueDate}).`);
+        } else {
+          reasons.push(`Masa aktif Cloud Server tinggal ${s.daysLeft} hari lagi (jatuh tempo ${dueFormatted || s.billingDueDate}).`);
+        }
+      }
+      this.showStorageWarningModal(reasons.join('\n\n'), waLink);
+    }
+  },
+
+  showStorageWarningModal(message, waLink) {
+    const modal = document.getElementById('storage-warning-modal');
+    const msgEl = document.getElementById('storage-warning-message');
+    const waEl = document.getElementById('storage-warning-wa');
+    if (!modal || !msgEl) return;
+    msgEl.textContent = message;
+    msgEl.style.whiteSpace = 'pre-line';
+    if (waEl) waEl.href = waLink;
+    modal.classList.remove('hidden');
+  },
+
+  closeStorageWarningModal() {
+    sessionStorage.setItem('dokproyek_warn_dismissed', '1');
+    const modal = document.getElementById('storage-warning-modal');
+    if (modal) modal.classList.add('hidden');
   },
 
   async handleLoginSubmit(e) {
@@ -330,12 +368,21 @@ const App = {
     `).join('');
   },
 
+  toggleMobileSidebar() {
+    const aside = document.getElementById('project-sidebar');
+    if (aside) aside.classList.toggle('hidden');
+  },
+
   async selectSubFolder(subId) {
     if (!this.currentProject) return;
     this.currentSubFolder = this.currentProject.subFolders.find((s) => s.subId === subId) || null;
     this.selectedIds.clear();
     this.updateSelectionBar();
     this.renderSidebarProjects();
+    if (window.innerWidth < 768) {
+      const aside = document.getElementById('project-sidebar');
+      if (aside) aside.classList.add('hidden');
+    }
     await this.loadPhotos();
   },
 

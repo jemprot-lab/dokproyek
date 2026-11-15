@@ -60,6 +60,8 @@ function routeAction(action, payload) {
       return handleManageUsers(payload);
     case 'SEARCH_PROJECTS':
       return handleSearchProjects(payload);
+    case 'LIST_PROJECT_NAMES':
+      return handleListProjectNames(payload);
     case 'UPLOAD_PHOTO_RAW':
       return handleUploadPhotoRaw(payload);
     case 'LIST_PHOTOS':

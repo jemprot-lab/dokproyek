@@ -134,6 +134,28 @@ function handleSearchProjects(payload) {
 }
 
 /**
+ * Daftar ringan hanya nama proyek aktif untuk autocomplete APK lapangan.
+ * Action: LIST_PROJECT_NAMES
+ */
+function handleListProjectNames(payload) {
+  var access = resolveViewerOrUploaderAccess(payload);
+  if (!access.valid) return { status: 'error', code: access.code, message: access.message };
+
+  var rows = readSheetRows(CONFIG.SHEETS.PROJECT_CACHE);
+  rows.sort(function (a, b) {
+    return String(b.Last_Updated || '').localeCompare(String(a.Last_Updated || ''));
+  });
+
+  var names = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (String(r.Project_Status || 'ACTIVE').toUpperCase() !== 'ACTIVE') continue;
+    if (r.Nama_Proyek) names.push(String(r.Nama_Proyek));
+  }
+  return { status: 'success', projectNames: names };
+}
+
+/**
  * Upload Foto Biner Murni dari APK Lapangan (EXIF 100% Utuh + Anti-Duplikat).
  * Action: UPLOAD_PHOTO_RAW
  */

@@ -15,10 +15,13 @@ var CONFIG = {
 
   // Konfigurasi Master Vendor (SaaS) - Akun rakun5441@gmail.com
   MASTER_VENDOR_SPREADSHEET_ID: '1Bc84Xcycj25GGJsvx1cNhjSicoY51hEaaPUAMOLTvGY',
-  VENDOR_WA_NUMBER: '6281234567890',       // Nomor WA Vendor penerima alert bot
-  VENDOR_CONTACT_WA: '6281234567890',      // Nomor WA CS untuk tombol Upgrade di Web/APK
+  VENDOR_WA_NUMBER: '6282135800288',       // Nomor WA Vendor penerima alert bot
+  VENDOR_CONTACT_WA: '6282135800288',      // Nomor WA CS untuk tombol Upgrade di Web/APK
   WA_API_PROVIDER: 'CALLMEBOT',            // CALLMEBOT | FONNTE | WABLAS
   WA_API_KEY: 'GANTI_DENGAN_API_KEY_WA',
+  TELEGRAM_BOT_TOKEN: '9251286977:AAEqff4iGsB308qcnGcvfWvlORFLE6aNqF8',
+  TELEGRAM_CHAT_ID: '9213073569',
+  VENDOR_ALERT_EMAIL: 'sigit.bayu.aji@gmail.com',
 
   // Kredensial Admin bawaan saat pertama kali setupDatabase() dijalankan
   DEFAULT_ADMIN_USERNAME: 'admin',

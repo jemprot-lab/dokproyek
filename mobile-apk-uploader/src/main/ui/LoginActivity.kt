@@ -12,14 +12,16 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.kontraktor.dokproyek.uploader.services.RawFileStreamer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -120,11 +122,11 @@ class LoginActivity : AppCompatActivity() {
                         put("password", pin)
                     }
                     val req = Request.Builder()
-                        .url(RawFileStreamer.GAS_URL)
+                        .url(RawFileStreamer.getGasUrl(this@LoginActivity))
                         .post(payload.toString().toRequestBody("text/plain;charset=utf-8".toMediaType()))
                         .build()
 
-                    val respStr = OkHttpClient().newCall(req).execute().body?.string() ?: "{}"
+                    val respStr = RawFileStreamer.httpClient.newCall(req).execute().body?.string() ?: "{}"
                     val json = JSONObject(respStr)
 
                     withContext(Dispatchers.Main) {
@@ -153,14 +155,46 @@ class LoginActivity : AppCompatActivity() {
             }
         }
 
+        val btnConfigUrl = TextView(this).apply {
+            text = "⚙️ Ganti URL Server"
+            textSize = 13f
+            setTextColor(Color.parseColor("#64748B"))
+            gravity = Gravity.CENTER
+            setPadding(0, 28, 0, 0)
+            setOnClickListener { showServerUrlDialog() }
+        }
+
         card.addView(title)
         card.addView(subtitle)
         card.addView(etUsername)
         card.addView(etPin)
         card.addView(tvError)
         card.addView(btnLogin)
+        card.addView(btnConfigUrl)
         root.addView(card)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(48 + bars.left, 48 + bars.top, 48 + bars.right, 48 + bars.bottom)
+            insets
+        }
         setContentView(root)
+    }
+
+    private fun showServerUrlDialog() {
+        val input = EditText(this).apply {
+            setText(RawFileStreamer.getGasUrl(this@LoginActivity))
+            hint = "https://script.google.com/macros/s/.../exec"
+            textSize = 13f
+        }
+        AlertDialog.Builder(this)
+            .setTitle("URL Server Google Apps Script")
+            .setMessage("Ubah jika Admin mengganti deployment URL (/exec). Kosongkan untuk kembali ke bawaan.")
+            .setView(input)
+            .setPositiveButton("Simpan") { _, _ ->
+                RawFileStreamer.saveGasUrl(this, input.text.toString())
+            }
+            .setNegativeButton("Batal", null)
+            .show()
     }
 
     private fun goToMain() {

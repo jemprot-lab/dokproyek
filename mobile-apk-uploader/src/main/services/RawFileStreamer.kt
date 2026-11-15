@@ -15,14 +15,32 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 object RawFileStreamer {
-    // Ganti dengan URL Deployment Google Apps Script (/exec)
-    const val GAS_URL = "https://script.google.com/macros/s/AKfycbwLnNIv3_3vR-1vq0qejIcUlKcEF7xVKW9prFE7_4fyCJd29vyLNS1X8UfqkFd7nCtm/exec"
+    // URL Default Deployment Google Apps Script (/exec)
+    const val DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwLnNIv3_3vR-1vq0qejIcUlKcEF7xVKW9prFE7_4fyCJd29vyLNS1X8UfqkFd7nCtm/exec"
+    private const val PREFS_NAME = "dokproyek_prefs"
+    private const val KEY_GAS_URL = "gas_api_url"
 
-    private val client = OkHttpClient.Builder()
+    val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .build()
+
+    fun getGasUrl(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val saved = prefs.getString(KEY_GAS_URL, null)?.trim()
+        return if (!saved.isNullOrEmpty()) saved else DEFAULT_GAS_URL
+    }
+
+    fun saveGasUrl(context: Context, url: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val trimmed = url.trim()
+        if (trimmed.isEmpty()) {
+            prefs.edit().remove(KEY_GAS_URL).apply()
+        } else {
+            prefs.edit().putString(KEY_GAS_URL, trimmed).apply()
+        }
+    }
 
     fun getFileNameAndSize(context: Context, uri: Uri): Pair<String, Long> {
         var name = "IMG_${System.currentTimeMillis()}.jpg"
@@ -79,9 +97,9 @@ object RawFileStreamer {
         }
 
         val body = payload.toString().toRequestBody("text/plain;charset=utf-8".toMediaType())
-        val request = Request.Builder().url(GAS_URL).post(body).build()
+        val request = Request.Builder().url(getGasUrl(context)).post(body).build()
 
-        client.newCall(request).execute().use { response ->
+        httpClient.newCall(request).execute().use { response ->
             val respText = response.body?.string() ?: "{}"
             return JSONObject(respText)
         }

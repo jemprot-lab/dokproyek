@@ -29,6 +29,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.kontraktor.dokproyek.uploader.services.RawFileStreamer
 import com.kontraktor.dokproyek.uploader.services.UploadForegroundService
 import com.kontraktor.dokproyek.uploader.ui.components.ExifBadge
@@ -37,7 +39,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -183,10 +184,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildSingleScreenUi() {
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.parseColor("#F8FAFC")) }
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F8FAFC"))
+        }
+        val scroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+            setBackgroundColor(Color.parseColor("#F8FAFC"))
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 48, 40, 64)
+            setPadding(40, 28, 40, 28)
         }
 
         val header = TextView(this).apply {
@@ -320,13 +332,27 @@ class MainActivity : AppCompatActivity() {
         root.addView(btnPickGallery)
         root.addView(tvPhotoSummary)
         root.addView(previewContainer)
-        root.addView(btnUpload)
-        root.addView(progressUpload)
-        root.addView(tvUploadStatus)
-        root.addView(btnRetryBox)
 
         scroll.addView(root)
-        setContentView(scroll)
+
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+            setPadding(40, 16, 40, 24)
+            addView(progressUpload)
+            addView(tvUploadStatus)
+            addView(btnRetryBox)
+            addView(btnUpload)
+        }
+
+        shell.addView(scroll)
+        shell.addView(bottomBar)
+        ViewCompat.setOnApplyWindowInsetsListener(shell) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+        setContentView(shell)
         updatePathBanner()
     }
 
@@ -480,23 +506,20 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val payload = JSONObject().apply {
-                    put("action", "SEARCH_PROJECTS")
+                    put("action", "LIST_PROJECT_NAMES")
                     put("authToken", authToken)
-                    put("query", "")
-                    put("includeArchived", false)
-                    put("limit", 200)
                 }
                 val req = Request.Builder()
-                    .url(RawFileStreamer.GAS_URL)
+                    .url(RawFileStreamer.getGasUrl(this@MainActivity))
                     .post(payload.toString().toRequestBody("text/plain;charset=utf-8".toMediaType()))
                     .build()
-                val respStr = OkHttpClient().newCall(req).execute().body?.string() ?: "{}"
+                val respStr = RawFileStreamer.httpClient.newCall(req).execute().body?.string() ?: "{}"
                 val json = JSONObject(respStr)
                 if (json.optString("status") == "success") {
-                    val arr = json.getJSONArray("projects")
+                    val arr = json.getJSONArray("projectNames")
                     val names = mutableListOf<String>()
                     for (i in 0 until arr.length()) {
-                        names.add(arr.getJSONObject(i).getString("projectName"))
+                        names.add(arr.getString(i))
                     }
                     withContext(Dispatchers.Main) {
                         allActiveProjects.clear()
@@ -578,10 +601,10 @@ class MainActivity : AppCompatActivity() {
                     put("authToken", authToken)
                 }
                 val req = Request.Builder()
-                    .url(RawFileStreamer.GAS_URL)
+                    .url(RawFileStreamer.getGasUrl(this@MainActivity))
                     .post(payload.toString().toRequestBody("text/plain;charset=utf-8".toMediaType()))
                     .build()
-                val respStr = OkHttpClient().newCall(req).execute().body?.string() ?: "{}"
+                val respStr = RawFileStreamer.httpClient.newCall(req).execute().body?.string() ?: "{}"
                 val json = JSONObject(respStr)
                 if (json.optString("status") == "success" && json.has("storage")) {
                     val st = json.getJSONObject("storage")
