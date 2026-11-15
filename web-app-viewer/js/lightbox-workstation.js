@@ -15,16 +15,28 @@ const LightboxWorkstation = {
   startY: 0,
   blobCache: {},
 
-  async fetchPhotoDataUrl(photo) {
+  async fetchPhotoDataUrl(photo, silent = false) {
     if (!photo) return '';
     if (this.blobCache[photo.id]) return this.blobCache[photo.id];
-    const res = await callGasApi('GET_PHOTO_BLOB', { fileId: photo.id });
+    const res = await callGasApi('GET_PHOTO_BLOB', {
+      fileId: photo.id,
+      preview: true,
+      _silent: silent
+    });
     if (res.status === 'success' && res.base64Data) {
       const dataUrl = `data:${res.mimeType || 'image/jpeg'};base64,${res.base64Data}`;
       this.blobCache[photo.id] = dataUrl;
       return dataUrl;
     }
     return photo.previewUrl || photo.thumbnailUrl || '';
+  },
+
+  prefetchAdjacent() {
+    if (this.photos.length <= 1) return;
+    const nextPhoto = this.photos[(this.currentIndex + 1) % this.photos.length];
+    const prevPhoto = this.photos[(this.currentIndex - 1 + this.photos.length) % this.photos.length];
+    if (nextPhoto && !this.blobCache[nextPhoto.id]) this.fetchPhotoDataUrl(nextPhoto, true);
+    if (prevPhoto && !this.blobCache[prevPhoto.id]) this.fetchPhotoDataUrl(prevPhoto, true);
   },
 
   init() {
@@ -129,10 +141,13 @@ const LightboxWorkstation = {
     this.resetTransform();
 
     const img = document.getElementById('lightbox-img');
-    img.src = '';
-    img.alt = '⏳ Memuat foto...';
+    const spinner = document.getElementById('lightbox-spinner');
+    const isCached = Boolean(this.blobCache[photo.id]);
+    img.src = isCached ? this.blobCache[photo.id] : (photo.thumbnailUrl || '');
+    img.alt = photo.name;
+    if (spinner) spinner.classList.toggle('hidden', isCached);
 
-    document.getElementById('lightbox-filename').textContent = `${photo.name} (⏳ Memuat...)`;
+    document.getElementById('lightbox-filename').textContent = isCached ? photo.name : `${photo.name} (Memuat...)`;
     document.getElementById('lightbox-time').textContent = photo.takenTime || '-';
     document.getElementById('lightbox-caption').textContent = photo.caption || 'Belum ada catatan.';
 
@@ -143,17 +158,23 @@ const LightboxWorkstation = {
       gpsEl.innerHTML = `<span class="text-orange-400">⚠️ Tanpa Koordinat GPS</span>`;
     }
 
-    const dataUrl = await this.fetchPhotoDataUrl(photo);
+    const dataUrl = await this.fetchPhotoDataUrl(photo, true);
     if (this.photos[this.currentIndex]?.id === photo.id) {
       img.src = dataUrl;
       img.alt = photo.name;
+      if (spinner) spinner.classList.add('hidden');
       document.getElementById('lightbox-filename').textContent = photo.name;
+      this.prefetchAdjacent();
     }
   },
 
   async openSplitCompare(twoPhotos) {
     if (!twoPhotos || twoPhotos.length !== 2) {
-      alert('Pilih tepat 2 foto untuk membandingkan Before / After.');
+      if (typeof UiFeedback !== 'undefined') {
+        UiFeedback.toast('Pilih tepat 2 foto untuk membandingkan Before / After.', 'warning');
+      } else {
+        alert('Pilih tepat 2 foto untuk membandingkan Before / After.');
+      }
       return;
     }
     const modal = document.getElementById('split-compare-modal');

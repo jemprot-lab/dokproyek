@@ -133,7 +133,11 @@ const ExportEngine = {
   },
 
   shareToWhatsApp(messageText) {
-    const url = `https://wa.me/?text=${encodeURIComponent(messageText)}`;
-    window.open(url, '_blank');
+    if (typeof UiFeedback !== 'undefined') {
+      UiFeedback.showWaShareModal(messageText);
+    } else {
+      const url = `https://web.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
+      window.open(url, '_blank');
+    }
   }
 };

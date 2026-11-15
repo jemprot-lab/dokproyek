@@ -33,10 +33,12 @@ const SessionState = {
 };
 
 async function callGasApi(action, payload = {}) {
+  const silent = Boolean(payload._silent);
   const body = {
     action,
     ...payload
   };
+  delete body._silent;
 
   if (SessionState.magicToken) {
     body.magicToken = SessionState.magicToken;
@@ -47,19 +49,33 @@ async function callGasApi(action, payload = {}) {
     }
   }
 
-  const res = await fetch(GAS_WEB_APP_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8'
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-  if (data.status === 'error' && (data.code === 'TOKEN_REVOKED' || data.code === 'UNAUTHORIZED')) {
-    SessionState.clear();
-    alert(data.message || 'Sesi berakhir atau akses telah dicabut Admin.');
-    window.location.reload();
+  if (!silent && typeof UiFeedback !== 'undefined') {
+    UiFeedback.showLoading('Menghubungkan ke server...');
   }
-  return data;
+
+  try {
+    const res = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    if (data.status === 'error' && (data.code === 'TOKEN_REVOKED' || data.code === 'UNAUTHORIZED')) {
+      SessionState.clear();
+      if (typeof UiFeedback !== 'undefined') {
+        await UiFeedback.alert(data.message || 'Sesi berakhir atau akses telah dicabut Admin.', 'Sesi Berakhir');
+      } else {
+        alert(data.message || 'Sesi berakhir atau akses telah dicabut Admin.');
+      }
+      window.location.reload();
+    }
+    return data;
+  } finally {
+    if (!silent && typeof UiFeedback !== 'undefined') {
+      UiFeedback.hideLoading();
+    }
+  }
 }

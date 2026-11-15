@@ -204,7 +204,7 @@ const AdminManager = {
     const dateVal = document.getElementById('magic-expiry-date').value;
 
     if (!label || checked.length === 0 || !dateVal) {
-      alert('Isi Nama Klien, pilih minimal 1 Proyek, dan tentukan Batas Waktu.');
+      UiFeedback.toast('Isi Nama Klien, pilih minimal 1 Proyek/Keterangan, dan tentukan Batas Waktu.', 'warning');
       return;
     }
 
@@ -223,11 +223,11 @@ const AdminManager = {
       document.getElementById('magic-label-input').value = '';
       await this.loadMagicLinks();
       this.switchMagicTab('list');
-      if (confirm('Magic Link berhasil dibuat! Langsung kirim ke WhatsApp sekarang?')) {
+      if (await UiFeedback.confirm('Magic Link berhasil dibuat! Langsung kirim ke WhatsApp sekarang?', 'Magic Link Siap')) {
         ExportEngine.shareToWhatsApp(res.magicLink.whatsappMessageTemplate);
       }
     } else {
-      alert(res.message || 'Gagal membuat Magic Link.');
+      await UiFeedback.alert(res.message || 'Gagal membuat Magic Link.', 'Gagal');
     }
   },
 
@@ -293,12 +293,13 @@ const AdminManager = {
     const item = this.magicLinks.find((l) => l.token === token);
     if (!item) return;
     await navigator.clipboard.writeText(item.fullUrl);
-    alert('Tautan Magic Link berhasil disalin!');
+    UiFeedback.toast('Tautan Magic Link berhasil disalin!', 'success');
   },
 
   async revokeMagicLink(token) {
-    if (!confirm('Matikan akses Magic Link ini sekarang?')) return;
+    if (!await UiFeedback.confirm('Matikan akses Magic Link ini sekarang?', 'Matikan Magic Link')) return;
     await callGasApi('MANAGE_MAGIC_LINK', { subAction: 'REVOKE', token });
+    UiFeedback.toast('Magic Link dimatikan.', 'info');
     await this.loadMagicLinks();
   },
 
@@ -356,7 +357,7 @@ const AdminManager = {
     const role = document.getElementById('new-user-role').value;
 
     if (!username || !/^\d{6}$/.test(password)) {
-      alert('Username wajib diisi dan PIN harus tepat 6 digit angka.');
+      UiFeedback.toast('Username wajib diisi dan PIN harus tepat 6 digit angka.', 'warning');
       return;
     }
 
@@ -371,38 +372,43 @@ const AdminManager = {
     if (res.status === 'success') {
       document.getElementById('new-user-username').value = '';
       document.getElementById('new-user-pin').value = '';
+      UiFeedback.toast(`Akun ${username} berhasil dibuat.`, 'success');
       await this.loadUsers();
     } else {
-      alert(res.message || 'Gagal membuat akun.');
+      await UiFeedback.alert(res.message || 'Gagal membuat akun.', 'Gagal');
     }
   },
 
   async revokeUserAuth(userId, username) {
-    if (!confirm(`Cabut otentikasi ${username}? HP mandor tersebut tidak akan bisa upload lagi.`)) return;
+    if (!await UiFeedback.confirm(`Cabut otentikasi ${username}? HP mandor tersebut tidak akan bisa upload lagi.`, 'Cabut Akses')) return;
     await callGasApi('MANAGE_USERS', { subAction: 'REVOKE_AUTH', targetUserId: userId });
+    UiFeedback.toast(`Akses ${username} dicabut.`, 'info');
     await this.loadUsers();
   },
 
   async activateUserAuth(userId) {
     await callGasApi('MANAGE_USERS', { subAction: 'ACTIVATE_AUTH', targetUserId: userId });
+    UiFeedback.toast('Akun diaktifkan kembali.', 'success');
     await this.loadUsers();
   },
 
   async resetUserPin(userId, username) {
-    const newPin = prompt(`Masukkan PIN 6 digit baru untuk ${username}:`);
-    if (!newPin || !/^\d{6}$/.test(newPin.trim())) {
-      alert('PIN harus tepat 6 digit angka.');
+    const newPin = await UiFeedback.prompt(`Masukkan PIN 6 digit baru untuk ${username}:`, '', 'Reset PIN');
+    if (newPin === null) return;
+    if (!/^\d{6}$/.test(newPin.trim())) {
+      UiFeedback.toast('PIN harus tepat 6 digit angka.', 'warning');
       return;
     }
     await callGasApi('MANAGE_USERS', { subAction: 'RESET_PASSWORD', targetUserId: userId, password: newPin.trim() });
-    alert('PIN berhasil direset. Perangkat lama otomatis keluar.');
+    await UiFeedback.alert('PIN berhasil direset. Perangkat lama otomatis keluar.', 'PIN Direset');
     await this.loadUsers();
   },
 
   async deleteUser(userId, username) {
-    if (!confirm(`Hapus permanen akun ${username}?`)) return;
+    if (!await UiFeedback.confirm(`Hapus permanen akun ${username}?`, 'Hapus Akun')) return;
     const res = await callGasApi('MANAGE_USERS', { subAction: 'DELETE_USER', targetUserId: userId });
-    if (res.status !== 'success') alert(res.message);
+    if (res.status !== 'success') await UiFeedback.alert(res.message, 'Gagal');
+    else UiFeedback.toast(`Akun ${username} dihapus.`, 'success');
     await this.loadUsers();
   },
 
@@ -419,7 +425,7 @@ const AdminManager = {
   },
 
   async editCaption(fileId, currentCaption) {
-    const text = prompt('Catatan / Revisi Foto:', currentCaption || '');
+    const text = await UiFeedback.prompt('Catatan / Revisi Foto:', currentCaption || '', 'Edit Catatan');
     if (text === null) return false;
     const res = await callGasApi('ADMIN_FILE_OPS', {
       operation: 'SET_CAPTION',
@@ -430,7 +436,7 @@ const AdminManager = {
   },
 
   async renameFolder(folderId, currentName) {
-    const newName = prompt('Ubah nama folder:', currentName || '');
+    const newName = await UiFeedback.prompt('Ubah nama folder:', currentName || '', 'Rename Folder');
     if (!newName || !newName.trim()) return false;
     const res = await callGasApi('ADMIN_FILE_OPS', {
       operation: 'RENAME_FOLDER',
@@ -442,7 +448,7 @@ const AdminManager = {
 
   async toggleArchiveProject(projectId, currentStatus) {
     const nextStatus = currentStatus === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE';
-    if (!confirm(`Ubah status proyek menjadi ${nextStatus}?`)) return false;
+    if (!await UiFeedback.confirm(`Ubah status proyek menjadi ${nextStatus}?`, 'Ubah Status Proyek')) return false;
     const res = await callGasApi('ADMIN_FILE_OPS', {
       operation: 'SET_ARCHIVE_STATUS',
       targetProjectId: projectId,
@@ -453,7 +459,7 @@ const AdminManager = {
 
   async softDeleteFiles(fileIds) {
     if (!fileIds.length) return false;
-    if (!confirm(`Pindahkan ${fileIds.length} foto ke Trash (dapat dipulihkan 30 hari)?`)) return false;
+    if (!await UiFeedback.confirm(`Pindahkan ${fileIds.length} foto ke Trash (dapat dipulihkan 30 hari)?`, 'Hapus Foto')) return false;
     const res = await callGasApi('ADMIN_FILE_OPS', {
       operation: 'SOFT_DELETE_TRASH',
       fileIds
@@ -464,11 +470,11 @@ const AdminManager = {
   async moveFilesPrompt(fileIds, projects) {
     if (!fileIds.length || !projects.length) return false;
     const listText = projects.map((p, i) => `${i + 1}. ${p.projectName}`).join('\n');
-    const pick = prompt(`Pilih nomor proyek tujuan:\n${listText}`);
+    const pick = await UiFeedback.prompt(`Pilih nomor proyek tujuan:\n${listText}`, '', 'Pindah Foto');
     const idx = parseInt(pick, 10) - 1;
     if (isNaN(idx) || !projects[idx]) return false;
 
-    const targetSub = prompt('Masukkan nama sub-folder tanggal tujuan (contoh: 15-08-2026 progress 10%):');
+    const targetSub = await UiFeedback.prompt('Masukkan nama sub-folder tanggal tujuan (contoh: 15-08-2026 progress 10%):', '', 'Folder Tujuan');
     if (!targetSub || !targetSub.trim()) return false;
 
     const res = await callGasApi('ADMIN_FILE_OPS', {
@@ -477,14 +483,14 @@ const AdminManager = {
       targetProjectId: projects[idx].folderId,
       targetSubFolderName: targetSub.trim()
     });
-    if (res.status === 'success') alert(res.message);
+    if (res.status === 'success') UiFeedback.toast(res.message, 'success');
     return res.status === 'success';
   },
 
   async emptyTrashPermanent() {
-    if (!confirm('Hapus permanen semua foto yang ada di Sampah (Trash) untuk membebaskan kapasitas penyimpanan? Tindakan ini tidak bisa dibatalkan.')) return;
+    if (!await UiFeedback.confirm('Hapus permanen semua foto yang ada di Sampah (Trash) untuk membebaskan kapasitas penyimpanan? Tindakan ini tidak bisa dibatalkan.', 'Kosongkan Sampah')) return;
     const res = await callGasApi('ADMIN_FILE_OPS', { operation: 'EMPTY_TRASH_PERMANENT' });
-    alert(res.message || 'Sampah berhasil dikosongkan.');
+    await UiFeedback.alert(res.message || 'Sampah berhasil dikosongkan.', 'Sampah Drive');
     if (res.status === 'success') {
       await App.loadStorageStatus();
     }
@@ -492,7 +498,7 @@ const AdminManager = {
 
   async deleteFolder(folderId, folderName, isProject) {
     const label = isProject ? 'proyek' : 'folder keterangan';
-    if (!confirm(`Yakin hapus ${label} "${folderName}" beserta seluruh isinya?\n\nFolder akan dipindahkan ke Sampah Google Drive (bisa dipulihkan selama 30 hari).`)) {
+    if (!await UiFeedback.confirm(`Yakin hapus ${label} "${folderName}" beserta seluruh isinya?\n\nFolder akan dipindahkan ke Sampah Google Drive (bisa dipulihkan selama 30 hari).`, 'Hapus Folder')) {
       return false;
     }
     const res = await callGasApi('ADMIN_FILE_OPS', {
@@ -500,10 +506,10 @@ const AdminManager = {
       targetFolderId: folderId
     });
     if (res.status === 'success') {
-      alert(res.message || `Folder "${folderName}" berhasil dihapus.`);
+      UiFeedback.toast(res.message || `Folder "${folderName}" berhasil dihapus.`, 'success');
       return true;
     }
-    alert(res.message || 'Gagal menghapus folder.');
+    await UiFeedback.alert(res.message || 'Gagal menghapus folder.', 'Gagal');
     return false;
   }
 };

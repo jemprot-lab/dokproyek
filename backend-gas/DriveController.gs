@@ -312,7 +312,22 @@ function handleGetPhotoBlob(payload) {
   var file = DriveApp.getFileById(fileId);
   if (file.isTrashed()) return { status: 'error', message: 'Foto sudah dihapus.' };
 
-  var blob = file.getBlob();
+  var blob = null;
+  if (payload.preview) {
+    try {
+      var thumbResp = UrlFetchApp.fetch('https://lh3.googleusercontent.com/d/' + encodeURIComponent(fileId) + '=w1200', {
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+      });
+      if (thumbResp.getResponseCode() === 200) {
+        blob = thumbResp.getBlob();
+      }
+    } catch (e) {}
+  }
+  if (!blob) {
+    blob = file.getBlob();
+  }
+
   return {
     status: 'success',
     fileId: fileId,

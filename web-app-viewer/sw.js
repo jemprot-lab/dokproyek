@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dokproyek-pwa-v6';
+const CACHE_NAME = 'dokproyek-pwa-v7';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const SHELL_ASSETS = [
   './assets/icon-192.png',
   './assets/icon-512.png',
   './css/styles.css',
+  './js/ui-feedback.js',
   './js/api-client.js',
   './js/app.js',
   './js/lightbox-workstation.js',

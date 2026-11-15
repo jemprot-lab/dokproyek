@@ -174,9 +174,9 @@ const App = {
     window.location.reload();
   },
 
-  configureGasUrl() {
+  async configureGasUrl() {
     const current = localStorage.getItem('gas_api_url') || '';
-    const next = prompt('Masukkan URL Web App Google Apps Script (/exec):', current);
+    const next = await UiFeedback.prompt('Masukkan URL Web App Google Apps Script (/exec):', current, 'Pengaturan URL Server');
     if (next && next.trim()) {
       localStorage.setItem('gas_api_url', next.trim());
       window.location.reload();
@@ -213,7 +213,7 @@ const App = {
     });
 
     if (res.status !== 'success') {
-      alert(res.message || 'Gagal memuat proyek.');
+      UiFeedback.toast(res.message || 'Gagal memuat proyek.', 'error');
       return;
     }
 
@@ -532,7 +532,7 @@ const App = {
 
   async onDeleteCurrentProject() {
     if (!this.currentProject) {
-      alert('Pilih proyek terlebih dahulu.');
+      UiFeedback.toast('Pilih proyek terlebih dahulu.', 'warning');
       return;
     }
     if (await AdminManager.deleteFolder(this.currentProject.folderId, this.currentProject.projectName, true)) {
@@ -547,7 +547,7 @@ const App = {
 
   async onDeleteCurrentSubFolder() {
     if (!this.currentSubFolder) {
-      alert('Pilih folder keterangan terlebih dahulu.');
+      UiFeedback.toast('Pilih folder keterangan terlebih dahulu.', 'warning');
       return;
     }
     await this.onDeleteSubFolder(this.currentSubFolder.subId, this.currentSubFolder.subName);

@@ -266,19 +266,28 @@ function validateMagicToken(token, incrementView) {
   });
 }
 
+function formatWibDateTimeStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, CONFIG.TIMEZONE, 'dd-MM-yyyy HH:mm');
+  }
+  return String(val).trim();
+}
+
 /**
  * Membangun payload Magic Link lengkap dengan template pesan WhatsApp.
  */
 function buildMagicLinkResponse(row, projectMap) {
   var ids = String(row.Allowed_Projects || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   var names = ids.map(function (id) { return projectMap[id] || id; });
+  var expiryFormatted = formatWibDateTimeStr(row.Expiry_Date);
   var fullUrl = CONFIG.WEB_APP_URL.replace(/\/$/, '') + '/?token=' + row.Token;
   var waMsg = 'Halo *' + row.Label_Penerima + '*,\n'
     + 'Berikut adalah tautan aplikasi dokumentasi foto untuk:\n'
-    + '📂 *' + names.join(', ') + '*\n\n'
+    + '* ' + names.join(', ') + '\n\n'
     + 'Silakan klik tautan di bawah ini untuk melihat, memperbesar (zoom), dan mengunduh foto:\n'
-    + '🔗 ' + fullUrl + '\n\n'
-    + '_Catatan: Tautan ini aktif hingga ' + row.Expiry_Date + ' WIB._';
+    + fullUrl + '\n\n'
+    + '_Catatan: Tautan ini aktif hingga ' + expiryFormatted + ' WIB._';
 
   return {
     token: row.Token,
@@ -287,8 +296,8 @@ function buildMagicLinkResponse(row, projectMap) {
     allowedProjectIds: ids,
     allowedProjectNames: names,
     photoFilter: row.Photo_Filter,
-    createdDate: row.Created_Date,
-    expiryDate: row.Expiry_Date,
+    createdDate: formatWibDateTimeStr(row.Created_Date),
+    expiryDate: expiryFormatted,
     status: row.Status,
     viewCount: Number(row.View_Count || 0),
     whatsappMessageTemplate: waMsg
