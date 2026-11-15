@@ -500,7 +500,7 @@ function handleAdminFileOps(payload) {
       targetFolder.setTrashed(true);
 
       if (parent && parent.getId() === CONFIG.ROOT_FOLDER_ID) {
-        var cacheSheet = getTenantSheet('Project_Cache');
+        var cacheSheet = getSheetOrInit(CONFIG.SHEETS.PROJECT_CACHE);
         var rows = cacheSheet.getDataRange().getValues();
         for (var i = 1; i < rows.length; i++) {
           if (String(rows[i][0]) === String(payload.targetFolderId)) {
@@ -513,9 +513,10 @@ function handleAdminFileOps(payload) {
       }
 
       appendAuditLog(
-        userEmail,
+        auth.user.Username,
         'ADMIN_DELETE_FOLDER',
-        folderName + ' (ID: ' + payload.targetFolderId + ')'
+        folderName,
+        'ID: ' + payload.targetFolderId
       );
       return { status: 'success', message: 'Folder "' + folderName + '" dipindahkan ke Sampah.' };
     }
