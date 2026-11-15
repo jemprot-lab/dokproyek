@@ -34,15 +34,36 @@ const App = {
     }
   },
 
+  isPwaInstalled() {
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    );
+  },
+
   registerPwa() {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
+
+    const btn = document.getElementById('btn-install-pwa');
+    if (this.isPwaInstalled()) {
+      if (btn) btn.classList.add('hidden');
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
+      if (this.isPwaInstalled()) {
+        if (btn) btn.classList.add('hidden');
+        return;
+      }
       e.preventDefault();
       this.deferredPwaPrompt = e;
-      const btn = document.getElementById('btn-install-pwa');
       if (btn) btn.classList.remove('hidden');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      this.deferredPwaPrompt = null;
+      if (btn) btn.classList.add('hidden');
     });
   },
 
@@ -54,6 +75,46 @@ const App = {
     document.getElementById('btn-install-pwa')?.classList.add('hidden');
   },
 
+  initIdleAutoLogout() {
+    if (!SessionState.authToken || SessionState.magicToken) return;
+    if (this._idleAutoLogoutInitialized) return;
+    this._idleAutoLogoutInitialized = true;
+
+    const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+    this._lastActivityAt = Date.now();
+
+    const performAutoLogout = async () => {
+      if (!SessionState.authToken || SessionState.magicToken) return;
+      clearTimeout(this._idleTimer);
+      SessionState.clear();
+      if (window.UiFeedback && typeof UiFeedback.alert === 'function') {
+        await UiFeedback.alert(
+          'Sesi Anda otomatis keluar karena tidak ada aktivitas selama 15 menit.',
+          'Auto Logout'
+        );
+      }
+      window.location.reload();
+    };
+
+    const resetTimer = () => {
+      this._lastActivityAt = Date.now();
+      clearTimeout(this._idleTimer);
+      this._idleTimer = setTimeout(performAutoLogout, IDLE_TIMEOUT_MS);
+    };
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach((evt) => {
+      window.addEventListener(evt, resetTimer, { passive: true });
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && Date.now() - this._lastActivityAt >= IDLE_TIMEOUT_MS) {
+        performAutoLogout();
+      }
+    });
+
+    resetTimer();
+  },
+
   showLoginView() {
     document.getElementById('login-view').classList.remove('hidden');
     document.getElementById('workspace-view').classList.add('hidden');
@@ -62,6 +123,7 @@ const App = {
   showMainWorkspace() {
     document.getElementById('login-view').classList.add('hidden');
     document.getElementById('workspace-view').classList.remove('hidden');
+    this.initIdleAutoLogout();
 
     const isAdmin = SessionState.isAdmin();
     document.querySelectorAll('.admin-only').forEach((el) => {

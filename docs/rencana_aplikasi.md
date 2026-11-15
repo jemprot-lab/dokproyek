@@ -543,7 +543,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
    * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
 
-### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v8`)
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v9`)
 1. **Navigasi & Pencarian Instan:**
    * Pencarian proyek/keterangan berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
    * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin.
@@ -556,6 +556,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Modal Magic Link dilengkapi pencarian proyek/keterangan + checkbox bertingkat (Proyek induk ↔ Folder keterangan).
    * Pengiriman ke WhatsApp memakai modal khusus (`showWaShareModal`) dengan input nomor WA tujuan opsional (`wa.me/628xxx?text=...` untuk kompatibilitas **WhatSie Linux**, atau `web.whatsapp.com/send?text=...` jika kosong, plus tombol Salin Pesan).
 4. **Export:** Mendukung **Unduh JPG Batch**, **Unduh ZIP**, dan **Cetak Laporan PDF**, serta tombol **☑️ Pilih Semua**.
+5. **PWA Install & Keamanan Sesi:** Tombol **Install Aplikasi** (`#btn-install-pwa`) otomatis tersembunyi jika sudah berjalan sebagai PWA terpasang (`standalone`) atau setelah `appinstalled`, serta fitur **Auto Logout 15 menit** (`initIdleAutoLogout`) jika akun login tidak aktif selama 15 menit (termasuk saat tab/PWA lama di-minimize).
 
 ### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.0.6` / `versionCode 7`)
 1. **UI Modern, Tidak Kaku, & Safe Area (`MainActivity.kt`):**
