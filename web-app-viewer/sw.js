@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dokproyek-pwa-v7';
+const CACHE_NAME = 'dokproyek-pwa-v8';
 const SHELL_ASSETS = [
   './',
   './index.html',

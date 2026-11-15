@@ -18,8 +18,8 @@ android {
         minSdk 24
         targetSdk 34
         // Naikkan versionCode (+1) setiap kali rilis update APK agar bisa langsung menimpa APK lama tanpa uninstall
-        versionCode 5
-        versionName "1.0.4"
+        versionCode 6
+        versionName "1.0.5"
     }
 
     sourceSets {

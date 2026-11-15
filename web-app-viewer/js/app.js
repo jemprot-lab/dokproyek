@@ -220,7 +220,8 @@ const App = {
     if (res.magicLinkInfo) {
       const banner = document.getElementById('magic-banner');
       banner.classList.remove('hidden');
-      banner.textContent = `🔗 Akses Tamu: ${res.magicLinkInfo.labelPenerima} (Aktif s/d ${res.magicLinkInfo.expiryDate} WIB)`;
+      const expLabel = this.formatIndonesianDate(res.magicLinkInfo.expiryDate) || res.magicLinkInfo.expiryDate;
+      banner.textContent = `🔗 Akses Tamu: ${res.magicLinkInfo.labelPenerima} (Aktif s/d ${expLabel})`;
     }
 
     this.allProjects = res.projects || [];
@@ -243,6 +244,7 @@ const App = {
       });
     }
     this.renderSidebarProjects();
+    this.renderMobileProjectSwitcher();
   },
 
   renderSidebarProjects() {
@@ -316,15 +318,37 @@ const App = {
   changeProjectPage(delta) {
     this.projectPage += delta;
     this.renderSidebarProjects();
+    this.renderMobileProjectSwitcher();
   },
 
   changeSubPage(delta) {
     this.subPage += delta;
     this.renderSidebarProjects();
+    this.renderMobileProjectSwitcher();
   },
 
-  selectProject(folderId) {
-    if (this.expandedProjectId === folderId) {
+  renderMobileProjectSwitcher() {
+    const el = document.getElementById('mobile-project-switcher');
+    if (!el) return;
+    if (this.projects.length <= 1) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      return;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = `
+      <div class="text-[11px] font-bold text-slate-500 mb-1.5">📁 ${this.projects.length} Proyek Tersedia (Ketuk untuk pindah):</div>
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        ${this.projects.map((p) => {
+          const active = this.currentProject?.folderId === p.folderId;
+          return `<button onclick="App.selectProject('${p.folderId}', true)" class="px-3.5 py-2 rounded-xl text-xs shrink-0 border transition ${active ? 'bg-amber-500 border-amber-600 text-slate-900 font-bold shadow-sm' : 'bg-white border-slate-300 text-slate-700 font-medium hover:bg-slate-50'}">📁 ${p.projectName}</button>`;
+        }).join('')}
+      </div>
+    `;
+  },
+
+  selectProject(folderId, forceSelect = false) {
+    if (!forceSelect && this.expandedProjectId === folderId) {
       this.expandedProjectId = null;
       this.renderSidebarProjects();
       return;
@@ -337,6 +361,7 @@ const App = {
     this.selectedIds.clear();
     this.updateSelectionBar();
     this.renderSidebarProjects();
+    this.renderMobileProjectSwitcher();
     this.renderSubFolderCards();
   },
 

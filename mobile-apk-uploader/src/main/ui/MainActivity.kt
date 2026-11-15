@@ -103,14 +103,14 @@ class MainActivity : AppCompatActivity() {
                     val hasErr = intent.getBooleanExtra("hasNetworkError", false)
 
                     progressUpload.visibility = if (isDone) View.GONE else View.VISIBLE
-                    progressUpload.max = total
-                    progressUpload.progress = current
-                    progressUpload.isIndeterminate = !isDone && current == 0
+                    progressUpload.isIndeterminate = !isDone
 
                     tvUploadStatus.visibility = View.VISIBLE
                     tvUploadStatus.text = msg
                     tvUploadStatus.setBackgroundColor(
-                        if (hasErr) Color.parseColor("#FEF3C7") else Color.parseColor("#DCFCE7")
+                        if (hasErr) Color.parseColor("#FEF3C7")
+                        else if (isDone) Color.parseColor("#DCFCE7")
+                        else Color.parseColor("#EFF6FF")
                     )
                     btnRetryBox.visibility = if (hasErr) View.VISIBLE else View.GONE
 
@@ -218,7 +218,13 @@ class MainActivity : AppCompatActivity() {
         actvProject = AutoCompleteTextView(this).apply {
             hint = "Ketik / Pilih Nama Proyek"
             minHeight = 140
-            threshold = 1
+            threshold = 0
+            setOnClickListener {
+                if (projectSuggestions.isNotEmpty()) showDropDown()
+            }
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus && projectSuggestions.isNotEmpty()) showDropDown()
+            }
         }
         projectAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, projectSuggestions)
         actvProject.setAdapter(projectAdapter)
@@ -505,27 +511,52 @@ class MainActivity : AppCompatActivity() {
     private fun loadActiveProjectsOnce() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val payload = JSONObject().apply {
+                val url = RawFileStreamer.getGasUrl(this@MainActivity)
+                val names = mutableListOf<String>()
+
+                val payloadLight = JSONObject().apply {
                     put("action", "LIST_PROJECT_NAMES")
                     put("authToken", authToken)
                 }
-                val req = Request.Builder()
-                    .url(RawFileStreamer.getGasUrl(this@MainActivity))
-                    .post(payload.toString().toRequestBody("text/plain;charset=utf-8".toMediaType()))
+                val reqLight = Request.Builder()
+                    .url(url)
+                    .post(payloadLight.toString().toRequestBody("text/plain;charset=utf-8".toMediaType()))
                     .build()
-                val respStr = RawFileStreamer.httpClient.newCall(req).execute().body?.string() ?: "{}"
-                val json = JSONObject(respStr)
-                if (json.optString("status") == "success") {
-                    val arr = json.getJSONArray("projectNames")
-                    val names = mutableListOf<String>()
+                val respLight = RawFileStreamer.httpClient.newCall(reqLight).execute().body?.string() ?: "{}"
+                val jsonLight = JSONObject(respLight)
+
+                if (jsonLight.optString("status") == "success" && jsonLight.has("projectNames")) {
+                    val arr = jsonLight.getJSONArray("projectNames")
                     for (i in 0 until arr.length()) {
                         names.add(arr.getString(i))
                     }
-                    withContext(Dispatchers.Main) {
-                        allActiveProjects.clear()
-                        allActiveProjects.addAll(names)
-                        filterProjectsLocally(actvProject.text.toString().trim())
+                } else {
+                    // Fallback jika backend GAS belum update ke LIST_PROJECT_NAMES
+                    val payloadFallback = JSONObject().apply {
+                        put("action", "SEARCH_PROJECTS")
+                        put("authToken", authToken)
+                        put("query", "")
+                        put("includeArchived", false)
+                        put("limit", 200)
                     }
+                    val reqFallback = Request.Builder()
+                        .url(url)
+                        .post(payloadFallback.toString().toRequestBody("text/plain;charset=utf-8".toMediaType()))
+                        .build()
+                    val respFallback = RawFileStreamer.httpClient.newCall(reqFallback).execute().body?.string() ?: "{}"
+                    val jsonFallback = JSONObject(respFallback)
+                    if (jsonFallback.optString("status") == "success" && jsonFallback.has("projects")) {
+                        val arr = jsonFallback.getJSONArray("projects")
+                        for (i in 0 until arr.length()) {
+                            names.add(arr.getJSONObject(i).getString("projectName"))
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    allActiveProjects.clear()
+                    allActiveProjects.addAll(names.distinct())
+                    filterProjectsLocally(actvProject.text.toString().trim())
                 }
             } catch (_: Exception) {}
         }
@@ -533,13 +564,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun filterProjectsLocally(query: String) {
         val matches = if (query.isEmpty()) {
-            allActiveProjects.take(5)
+            allActiveProjects.take(8)
         } else {
-            allActiveProjects.filter { it.contains(query, ignoreCase = true) }.take(5)
+            allActiveProjects.filter { it.contains(query, ignoreCase = true) }.take(8)
         }
         projectSuggestions.clear()
         projectSuggestions.addAll(matches)
-        projectAdapter.notifyDataSetChanged()
+        // Buat ulang ArrayAdapter agar filter internal Android tidak menyimpan cache lama yang kosong
+        projectAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, ArrayList(matches))
+        actvProject.setAdapter(projectAdapter)
+        if (actvProject.hasFocus() && matches.isNotEmpty()) {
+            actvProject.showDropDown()
+        }
 
         val exactMatch = allActiveProjects.any { it.equals(query, ignoreCase = true) }
         if (query.isNotEmpty() && !exactMatch) {
