@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#F59E0B">
+  <title>Dokumentasi Proyek Kontraktor</title>
+  <link rel="manifest" href="./manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+
+  <!-- ================= LOGIN VIEW ================= -->
+  <div id="login-view" class="min-h-screen flex items-center justify-center p-4 bg-slate-900">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-5">
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 text-slate-900 text-2xl font-bold mb-3">🏗️</div>
+        <h1 class="text-xl font-bold text-slate-900">Dokumentasi Proyek</h1>
+        <p class="text-sm text-slate-500">Masuk untuk melihat & mengelola foto lapangan</p>
+      </div>
+
+      <form onsubmit="App.handleLoginSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
+          <input id="login-username" type="text" required placeholder="admin" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">PIN (6 Digit) / Password</label>
+          <input id="login-pin" type="password" inputmode="numeric" required placeholder="••••••" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div id="login-error" class="hidden text-sm text-red-600 bg-red-50 p-3 rounded-xl"></div>
+        <button type="submit" class="w-full btn-field bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-base">Masuk</button>
+      </form>
+
+      <div class="pt-2 border-t border-slate-100 text-center">
+        <button onclick="App.configureGasUrl()" class="text-xs text-slate-400 hover:text-slate-600 underline">⚙️ Atur URL Server GAS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN WORKSPACE VIEW ================= -->
+  <div id="workspace-view" class="hidden min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-slate-900 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 no-print">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🏗️</span>
+        <div>
+          <div class="font-bold text-base leading-tight">Dokumentasi Proyek</div>
+          <div id="header-user-label" class="text-xs text-amber-400"></div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="btn-install-pwa" onclick="App.installPwa()" class="hidden px-3 py-2 text-xs font-bold rounded-xl bg-amber-500 text-slate-900">📲 Install Aplikasi</button>
+        <button onclick="AdminManager.openMagicLinkModal(App.projects)" class="admin-only hidden px-3 py-2 text-xs font-bold rounded-xl bg-amber-500 text-slate-900 hover:bg-amber-400">🔗 Magic Link WA</button>
+        <button onclick="AdminManager.openUsersModal()" class="admin-only hidden px-3 py-2 text-xs font-bold rounded-xl bg-slate-700 text-white hover:bg-slate-600">👷 Kelola Akun APK</button>
+        <button id="btn-logout" onclick="App.logout()" class="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-800 text-slate-300 hover:bg-red-600 hover:text-white">Keluar</button>
+      </div>
+    </header>
+
+    <div id="magic-banner" class="hidden bg-amber-100 border-b border-amber-300 px-4 py-2 text-xs font-semibold text-amber-900 text-center"></div>
+    <div id="storage-alert-banner" class="hidden px-4 py-2.5 text-xs font-bold text-center flex flex-wrap items-center justify-center gap-3 no-print"></div>
+
+    <!-- Body Layout -->
+    <div class="flex-1 flex flex-col md:flex-row">
+      <!-- Sidebar Proyek -->
+      <aside class="w-full md:w-80 bg-white border-r border-slate-200 p-4 space-y-3 no-print">
+        <!-- Indikator Kuota Penyimpanan -->
+        <div id="storage-quota-card" class="hidden p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+          <div class="flex justify-between text-xs font-bold text-slate-700">
+            <span>💾 Penyimpanan Cloud</span>
+            <span id="storage-quota-text" class="font-mono-code">0 / 5 GB</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+            <div id="storage-quota-bar" class="h-full bg-emerald-500 transition-all" style="width: 0%"></div>
+          </div>
+          <div id="storage-due-text" class="text-[11px] text-slate-500"></div>
+          <button onclick="AdminManager.emptyTrashPermanent()" class="admin-only hidden w-full py-1.5 text-xs font-semibold rounded-lg bg-slate-200 hover:bg-red-100 hover:text-red-700 text-slate-700">🧹 Kosongkan Sampah Permanen</button>
+        </div>
+
+        <div class="flex gap-2">
+          <input id="project-search-input" type="text" oninput="App.loadProjects(false)" placeholder="🔍 Cari proyek..." class="flex-1 px-3 py-2 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <label class="admin-only hidden flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+          <input id="toggle-archived" type="checkbox" onchange="App.loadProjects(false)" class="accent-amber-500">
+          Tampilkan Proyek Diarsipkan
+        </label>
+        <div id="sidebar-projects" class="space-y-2 max-h-[70vh] overflow-y-auto"></div>
+      </aside>
+
+      <!-- Main Gallery Area -->
+      <main class="flex-1 p-4 pb-28">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h2 id="gallery-header-title" class="text-lg font-bold text-slate-900">Pilih Proyek & Tanggal</h2>
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btn-filter-star" onclick="App.toggleStarFilter()" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white hover:bg-amber-50">⭐ Hanya Favorit</button>
+            <button onclick="App.onRenameCurrentProject()" class="admin-only hidden px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 bg-white hover:bg-slate-100">✏️ Rename Proyek</button>
+            <button onclick="App.onToggleArchiveCurrentProject()" class="admin-only hidden px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 bg-white hover:bg-slate-100">📦 Arsipkan</button>
+          </div>
+        </div>
+
+        <div id="photo-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"></div>
+      </main>
+    </div>
+
+    <!-- Floating Action Bar -->
+    <div id="floating-action-bar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center gap-2.5 max-w-[95vw] no-print">
+      <span id="selected-count-label" class="text-xs font-bold text-amber-400 mr-1">0 foto</span>
+      <span id="export-status" class="text-xs text-emerald-400"></span>
+      <button onclick="App.onBatchZip()" class="px-3 py-2 text-xs font-bold rounded-xl bg-amber-500 text-slate-900">📦 Unduh .ZIP</button>
+      <button onclick="App.onBatchPdf()" class="px-3 py-2 text-xs font-bold rounded-xl bg-emerald-500 text-slate-900">📄 Laporan PDF</button>
+      <button onclick="App.onSplitCompare()" class="px-3 py-2 text-xs font-bold rounded-xl bg-slate-700 text-white">⚖️ Bandingkan (2)</button>
+      <button onclick="App.onMoveSelected()" class="admin-only hidden px-3 py-2 text-xs font-bold rounded-xl bg-blue-600 text-white">📁 Pindah</button>
+      <button onclick="App.onSoftDeleteSelected()" class="admin-only hidden px-3 py-2 text-xs font-bold rounded-xl bg-red-600 text-white">🗑️ Hapus</button>
+    </div>
+  </div>
+
+  <!-- ================= WORKSTATION LIGHTBOX MODAL ================= -->
+  <div id="lightbox-modal" class="hidden fixed inset-0 z-50 bg-slate-900 flex flex-col">
+    <div class="px-4 py-3 bg-slate-950 text-white flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <div id="lightbox-filename" class="font-bold text-sm"></div>
+        <div class="text-xs text-slate-400 flex flex-wrap gap-3">
+          <span id="lightbox-time" class="font-mono-code"></span>
+          <span id="lightbox-gps"></span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="lightbox-zoom-label" class="text-xs font-mono-code text-amber-400">100%</span>
+        <button onclick="LightboxWorkstation.setZoom(LightboxWorkstation.scale + 0.5)" class="px-2.5 py-1.5 text-xs bg-slate-800 rounded-lg">➕ Zoom</button>
+        <button onclick="LightboxWorkstation.setZoom(LightboxWorkstation.scale - 0.5)" class="px-2.5 py-1.5 text-xs bg-slate-800 rounded-lg">➖</button>
+        <button onclick="LightboxWorkstation.rotate90()" class="px-2.5 py-1.5 text-xs bg-slate-800 rounded-lg">🔄 90°</button>
+        <button onclick="LightboxWorkstation.resetTransform()" class="px-2.5 py-1.5 text-xs bg-slate-800 rounded-lg">Reset</button>
+        <button onclick="LightboxWorkstation.close()" class="px-3 py-1.5 text-xs font-bold bg-red-600 rounded-lg">✕ Tutup</button>
+      </div>
+    </div>
+
+    <div id="lightbox-stage" class="lightbox-stage flex-1 relative flex items-center justify-center">
+      <button onclick="LightboxWorkstation.prev()" class="absolute left-3 z-10 px-3 py-4 rounded-xl bg-black/50 text-white text-xl">‹</button>
+      <img id="lightbox-img" class="lightbox-img" src="" alt="Preview">
+      <button onclick="LightboxWorkstation.next()" class="absolute right-3 z-10 px-3 py-4 rounded-xl bg-black/50 text-white text-xl">›</button>
+    </div>
+
+    <div class="px-4 py-2.5 bg-slate-950 text-slate-300 text-xs">
+      📝 <span id="lightbox-caption"></span>
+    </div>
+  </div>
+
+  <!-- ================= SPLIT-SCREEN COMPARE MODAL ================= -->
+  <div id="split-compare-modal" class="hidden fixed inset-0 z-50 bg-slate-900 flex flex-col">
+    <div class="px-4 py-3 bg-slate-950 text-white flex items-center justify-between">
+      <div class="font-bold text-sm">⚖️ Perbandingan Before / After</div>
+      <button onclick="LightboxWorkstation.closeSplitCompare()" class="px-3 py-1.5 text-xs font-bold bg-red-600 rounded-lg">✕ Tutup</button>
+    </div>
+    <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2 p-3 overflow-hidden">
+      <div class="bg-black rounded-xl flex flex-col overflow-hidden">
+        <div id="compare-left-label" class="px-3 py-2 text-xs text-amber-400 bg-slate-950 font-mono-code"></div>
+        <img id="compare-left-img" class="flex-1 object-contain w-full h-full" src="" alt="Before">
+      </div>
+      <div class="bg-black rounded-xl flex flex-col overflow-hidden">
+        <div id="compare-right-label" class="px-3 py-2 text-xs text-emerald-400 bg-slate-950 font-mono-code"></div>
+        <img id="compare-right-img" class="flex-1 object-contain w-full h-full" src="" alt="After">
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL MANAJEMEN MAGIC LINK ================= -->
+  <div id="magic-link-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div class="font-bold text-base">🔗 Manajemen Magic Link Klien & Pengawas</div>
+        <button onclick="AdminManager.closeMagicLinkModal()" class="px-3 py-1 rounded-lg bg-slate-700 text-xs font-bold">✕</button>
+      </div>
+
+      <div class="px-5 pt-3 border-b border-slate-200 flex gap-2 bg-slate-50">
+        <button id="btn-magic-tab-create" onclick="AdminManager.switchMagicTab('create')" class="px-4 py-2 text-xs rounded-t-xl">➕ Buat Link Baru</button>
+        <button id="btn-magic-tab-list" onclick="AdminManager.switchMagicTab('list')" class="px-4 py-2 text-xs rounded-t-xl">📋 Daftar Link Aktif (<span id="magic-active-count">0</span>)</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto flex-1">
+        <!-- Tab 1: Create -->
+        <div id="magic-tab-create" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Nama Label / Klien</label>
+            <input id="magic-label-input" type="text" placeholder="Contoh: Pak Budi - Owner" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Pilih Proyek Diizinkan (Multi-Project)</label>
+            <div id="magic-projects-checkboxes" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto"></div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Filter Foto</label>
+              <select id="magic-photo-filter" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+                <option value="ALL">Semua Foto</option>
+                <option value="STARRED_ONLY">⭐ Hanya Foto Berbintang</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Batas Waktu (Strict Expiry)</label>
+              <div class="flex flex-wrap gap-1.5 mb-2">
+                <button type="button" onclick="AdminManager.setQuickExpiryDays(1)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-200 hover:bg-amber-400 font-semibold">1 Hari</button>
+                <button type="button" onclick="AdminManager.setQuickExpiryDays(7)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-200 hover:bg-amber-400 font-semibold">7 Hari</button>
+                <button type="button" onclick="AdminManager.setQuickExpiryDays(14)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-200 hover:bg-amber-400 font-semibold">14 Hari</button>
+                <button type="button" onclick="AdminManager.setQuickExpiryDays(30)" class="px-2.5 py-1 text-xs rounded-lg bg-slate-200 hover:bg-amber-400 font-semibold">30 Hari</button>
+              </div>
+              <input id="magic-expiry-date" type="date" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+            </div>
+          </div>
+          <button onclick="AdminManager.createMagicLink()" class="w-full btn-field bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-sm">🔗 Buat Magic Link Sekarang</button>
+        </div>
+
+        <!-- Tab 2: List & Resend -->
+        <div id="magic-tab-list" class="hidden space-y-3">
+          <input id="magic-search-input" type="text" oninput="AdminManager.renderMagicLinksTable()" placeholder="🔍 Cari nama klien / proyek..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+          <div class="overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-100 text-xs uppercase text-slate-600">
+                <tr>
+                  <th class="p-3">Klien & Filter</th>
+                  <th class="p-3">Proyek Diizinkan</th>
+                  <th class="p-3">Batas Waktu</th>
+                  <th class="p-3">Aksi Cepat</th>
+                </tr>
+              </thead>
+              <tbody id="magic-links-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL KELOLA AKUN & OTENTIKASI APK ================= -->
+  <div id="users-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div class="font-bold text-base">👷 Kelola Akun & Cabut Otentikasi APK</div>
+        <button onclick="AdminManager.closeUsersModal()" class="px-3 py-1 rounded-lg bg-slate-700 text-xs font-bold">✕</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-5">
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
+            <input id="new-user-username" type="text" placeholder="mandor_agus" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">PIN 6 Digit</label>
+            <input id="new-user-pin" type="text" maxlength="6" inputmode="numeric" placeholder="123456" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-mono-code">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Peran</label>
+            <select id="new-user-role" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm">
+              <option value="UPLOADER">UPLOADER (APK Lapangan)</option>
+              <option value="VIEWER">VIEWER (Lihat Web)</option>
+              <option value="ADMIN">ADMIN (Penuh)</option>
+            </select>
+          </div>
+          <button onclick="AdminManager.createUser()" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-sm">+ Tambah Akun</button>
+        </div>
+
+        <div class="overflow-x-auto border border-slate-200 rounded-xl">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-100 text-xs uppercase text-slate-600">
+              <tr>
+                <th class="p-3">Username</th>
+                <th class="p-3">Peran</th>
+                <th class="p-3">Status Akses</th>
+                <th class="p-3">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/api-client.js"></script>
+  <script src="./js/lightbox-workstation.js"></script>
+  <script src="./js/export-engine.js"></script>
+  <script src="./js/admin-manager.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

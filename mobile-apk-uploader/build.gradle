@@ -1,0 +1,65 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
+android {
+    namespace 'com.kontraktor.dokproyek.uploader'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.kontraktor.dokproyek.uploader"
+        minSdk 24
+        targetSdk 34
+        // Naikkan versionCode (+1) setiap kali rilis update APK agar bisa langsung menimpa APK lama tanpa uninstall
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            // Gunakan keystore tetap (dokproyek-release.jks) agar update APK tidak perlu uninstall dulu
+            def ksPath = System.getenv("KEYSTORE_FILE") ?: keystoreProps['storeFile'] ?: "dokproyek-release.jks"
+            def ksFile = file(ksPath)
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: keystoreProps['storePassword']
+                keyAlias System.getenv("KEY_ALIAS") ?: keystoreProps['keyAlias'] ?: "dokproyek"
+                keyPassword System.getenv("KEY_PASSWORD") ?: keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.exifinterface:exifinterface:1.3.7'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}

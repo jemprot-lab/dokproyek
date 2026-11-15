@@ -1,0 +1,13 @@
+# Android & Keystore Secrets (Jangan pernah commit keystore/password ke repo publik)
+*.jks
+*.keystore
+keystore.properties
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
