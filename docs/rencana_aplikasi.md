@@ -520,4 +520,50 @@ Antigravity wajib menambahkan modul `VendorNotifier.gs` di `backend-gas/` yang t
   * `VendorMaster.gs` — Berisi fungsi `initVendorMaster()` (auto-create sheet `Tenants_Master`, header, formula persentase, dan jadwal trigger harian jam 08:00 WIB & jam 02:00 WIB) serta fungsi `checkTenantQuotaAndBilling()` dan `updateTenantUsage()`.
   * `VendorNotifier.gs` — Modul pengiriman pesan WhatsApp otomatis via `UrlFetchApp.fetch()` (CallMeBot / Fonnte / Wablas) untuk alert kuota 90% dan tagihan bulanan Cloud Server.
 * **Tambahan Operasi di `ADMIN_FILE_OPS` (`DriveController.gs`):**
+  * `EMPTY_TRASH_PERMANENT`, `GET_STORAGE_STATUS`, dan `DELETE_FOLDER` (hapus folder proyek atau folder keterangan ke Sampah Drive + sinkronisasi `Project_Cache`).
+
+---
+
+## 12. Pembaruan Implementasi & Status Terkini (Sinkronisasi Akhir)
+
+Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hingga kondisi aplikasi saat ini:
+
+### A. Branding & Aset Visual
+* Ikon resmi `DokProyek.png`, `DokProyek512.png`, dan `DokProyek1024.png` sudah terpasang untuk logo Web App, ikon PWA (`icon-192.png`, `icon-512.png`), serta ikon launcher Android APK.
+
+### B. Backend Google Apps Script (`backend-gas/`)
+1. **OAuth Scope (`appsscript.json`):** Menambahkan `https://www.googleapis.com/auth/script.send_mail` agar `MailApp.sendEmail()` berjalan tanpa kendala izin.
+2. **Notifikasi Multi-Channel Vendor (`Config.gs` & `VendorNotifier.gs`):**
+   * Karena layanan gratis CallMeBot WhatsApp sering penuh, notifikasi otomatis untuk Vendor (peringatan kuota `>= 90%` & tagihan H-3 jatuh tempo) dikirim langsung melalui **Telegram Bot** (`TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`) serta **Email** (`VENDOR_ALERT_EMAIL` via `MailApp`), tetap mempertahankan adapter opsional WhatsApp Gateway (CallMeBot/Fonnte/Wablas).
+   * Nomor kontak WhatsApp penyedia/CS (`VENDOR_WA_NUMBER` & `VENDOR_CONTACT_WA`) diset ke `6282135800288`.
+   * Tersedia fungsi `testVendorNotification()` untuk tes pengiriman Telegram + Email 1 klik dari editor Apps Script.
+3. **Integritas Data & Endpoint Tambahan (`VendorMaster.gs`, `Code.gs`, `DriveController.gs`, `AuthMagicLink.gs`):**
+   * `parseSafeGbNumber()` & `formatDueDateDmy()` mengatasi format desimal (misal `2.5`) dan objek `Date` Google Sheets lokal Indonesia, serta mengirim `daysLeft` ke Web App.
+   * Endpoint ringan `LIST_PROJECT_NAMES` khusus autocomplete APK lapangan agar startup cepat tanpa payload `Sub_Folders_JSON`.
+   * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
+   * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
+
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v7`)
+1. **Navigasi & Pencarian Instan:**
+   * Pencarian proyek/keterangan berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
+   * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin.
+   * Responsif di layar HP dengan tombol drawer **📂 Proyek** (`md:hidden`), `env(safe-area-inset-*)`, dan splash `manifest.json` selaras `#F8FAFC`.
+2. **Preview Cepat, Spinner, & Pop-up Modern (`ui-feedback.js` & `lightbox-workstation.js`):**
+   * Preview Lightbox memakai `GET_PHOTO_BLOB` mode `preview: true` (`=w1200`), thumbnail instan, spinner `#lightbox-spinner`, serta *prefetch* foto kiri/kanan di background.
+   * Spinner loading global otomatis muncul saat menunggu respons server (`callGasApi`).
+   * Seluruh `alert()`, `confirm()`, `prompt()` diganti modal dialog & toast modern; tersedia pop-up peringatan kuota `>= 85%` atau masa aktif `<= 7 hari` (klik **OK** untuk lanjut memakai aplikasi).
+3. **Magic Link Bertingkat & Modal WhatsApp (`admin-manager.js` & `export-engine.js`):**
+   * Modal Magic Link dilengkapi pencarian proyek/keterangan + checkbox bertingkat (Proyek induk ↔ Folder keterangan).
+   * Pengiriman ke WhatsApp memakai modal khusus (`showWaShareModal`) dengan input nomor WA tujuan opsional (`wa.me/628xxx?text=...` untuk kompatibilitas **WhatSie Linux**, atau `web.whatsapp.com/send?text=...` jika kosong, plus tombol Salin Pesan).
+4. **Export:** Mendukung **Unduh JPG Batch**, **Unduh ZIP**, dan **Cetak Laporan PDF**, serta tombol **☑️ Pilih Semua**.
+
+### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.0.4` / `versionCode 5`)
+1. **UI Lapangan & UX:** Menghapus angka `1.`/`3.` pada hint, preview thumbnail foto terpilih dengan tombol hapus `[✕]`, pilih galeri bersifat menambah (*append*) tanpa menghapus pilihan sebelumnya, `ProgressBar` animasi upload, notifikasi background hilang bersih saat sukses, serta dialog selesai dengan tombol `OK` yang mereset form.
+2. **Performa & Keandalan:** Autocomplete proyek memuat data sekali jalan lewat `LIST_PROJECT_NAMES` (`filterProjectsLocally`), `RawFileStreamer.httpClient` terpusat, serta menu **⚙️ Ganti URL Server** di layar Login.
+3. **Safe Area & Thumb-Zone:** Menerapkan `WindowInsetsCompat.Type.systemBars()` dan menempelkan bar **🚀 KIRIM FOTO** di bagian bawah layar (*sticky bottom thumb-zone*).
+4. **Rilis Lokal:** Hasil build signed APK terbaru tersimpan di `apk-release/dokproyek-uploader-release.apk`.
+
+### E. Catatan Deploy & Backlog
+* **Deploy Manual GAS:** Setiap perubahan pada `backend-gas/` wajib disalin ke editor Google Apps Script lalu di-deploy sebagai **New version** (*Deploy > Manage deployments > Edit > Version: New version > Deploy*), termasuk menjalankan `initVendorMaster()` 1x untuk mengaktifkan trigger harian.
+* **Backlog:** Penambahan WA Gateway berbayar (Fonnte/Wablas) di `Config.gs` bila suatu saat dibutuhkan pengiriman otomatis langsung ke nomor WhatsApp konsumen.
   * Mendukung `"EMPTY_TRASH_PERMANENT"` (khusus Admin konsumen untuk menghapus permanen file di *Trash* folder proyek mereka guna membebaskan kuota penyimpanan) dan `"GET_STORAGE_STATUS"` (mengembalikan `usedGb`, `limitGb`, `percent`, dan `billingDueDate` untuk ditampilkan pada bar penyimpanan Web App & APK).
