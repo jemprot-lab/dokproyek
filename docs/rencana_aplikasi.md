@@ -543,7 +543,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
    * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
 
-### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v10`)
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v13`)
 1. **Navigasi & Pencarian Instan:**
    * Pencarian proyek/keterangan (termasuk nama pengirim/uploader untuk Admin) berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
    * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin serta badge pengirim **`👤 username`** khusus Admin per folder keterangan (bersumber dari metadata Drive + fallback `Audit_Logs`, tersembunyi dari tamu Magic Link).
@@ -570,4 +570,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
 
 ### E. Catatan Deploy & Backlog
 * **Deploy Manual GAS:** Setiap perubahan pada `backend-gas/` wajib disalin ke editor Google Apps Script lalu di-deploy sebagai **New version** (*Deploy > Manage deployments > Edit > Version: New version > Deploy*), termasuk menjalankan `initVendorMaster()` 1x untuk mengaktifkan trigger harian.
-* **Backlog:** Penambahan WA Gateway berbayar (Fonnte/Wablas) di `Config.gs` bila suatu saat dibutuhkan pengiriman otomatis langsung ke nomor WhatsApp konsumen.
+* **Backlog:**
+  * Penambahan WA Gateway berbayar (Fonnte/Wablas) di `Config.gs` bila suatu saat dibutuhkan pengiriman otomatis langsung ke nomor WhatsApp konsumen.
+  * **Login Web App & PWA (Rencana):** Gunakan **Username & Password** saja (tanpa PIN, bukan `inputmode="numeric"`), serta tambahkan **ikon mata** (toggle show/hide password) di halaman login. **APK tetap memakai Username & PIN.**
+  * **Footer Vendor (Rencana):** Tambahkan footer vendor di Web App/PWA (menunggu teks/format footer yang disiapkan Mas Bos).
