@@ -1,6 +1,6 @@
 plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
+    id 'com.android.application' version '8.5.2'
+    id 'org.jetbrains.kotlin.android' version '1.9.24'
 }
 
 def keystorePropsFile = rootProject.file("keystore.properties")
@@ -22,9 +22,15 @@ android {
         versionName "1.0.0"
     }
 
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src/main']
+        }
+    }
+
     signingConfigs {
         release {
-            // Gunakan keystore tetap (dokproyek-release.jks) agar update APK tidak perlu uninstall dulu
             def ksPath = System.getenv("KEYSTORE_FILE") ?: keystoreProps['storeFile'] ?: "dokproyek-release.jks"
             def ksFile = file(ksPath)
             if (ksFile.exists()) {
