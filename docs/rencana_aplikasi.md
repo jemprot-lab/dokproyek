@@ -543,11 +543,11 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
    * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
 
-### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v7`)
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v8`)
 1. **Navigasi & Pencarian Instan:**
    * Pencarian proyek/keterangan berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
    * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin.
-   * Responsif di layar HP dengan tombol drawer **📂 Proyek** (`md:hidden`), `env(safe-area-inset-*)`, dan splash `manifest.json` selaras `#F8FAFC`.
+   * Responsif di layar HP dengan tombol drawer **📂 Proyek** (`md:hidden`), bar *pill* geser horizontal **`#mobile-project-switcher`** saat tersedia lebih dari 1 proyek (termasuk Magic Link multi-proyek), `env(safe-area-inset-*)`, splash `manifest.json` selaras `#F8FAFC`, dan format tanggal Indonesia pada `#magic-banner`.
 2. **Preview Cepat, Spinner, & Pop-up Modern (`ui-feedback.js` & `lightbox-workstation.js`):**
    * Preview Lightbox memakai `GET_PHOTO_BLOB` mode `preview: true` (`=w1200`), thumbnail instan, spinner `#lightbox-spinner`, serta *prefetch* foto kiri/kanan di background.
    * Spinner loading global otomatis muncul saat menunggu respons server (`callGasApi`).
@@ -557,13 +557,16 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Pengiriman ke WhatsApp memakai modal khusus (`showWaShareModal`) dengan input nomor WA tujuan opsional (`wa.me/628xxx?text=...` untuk kompatibilitas **WhatSie Linux**, atau `web.whatsapp.com/send?text=...` jika kosong, plus tombol Salin Pesan).
 4. **Export:** Mendukung **Unduh JPG Batch**, **Unduh ZIP**, dan **Cetak Laporan PDF**, serta tombol **☑️ Pilih Semua**.
 
-### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.0.4` / `versionCode 5`)
-1. **UI Lapangan & UX:** Menghapus angka `1.`/`3.` pada hint, preview thumbnail foto terpilih dengan tombol hapus `[✕]`, pilih galeri bersifat menambah (*append*) tanpa menghapus pilihan sebelumnya, `ProgressBar` animasi upload, notifikasi background hilang bersih saat sukses, serta dialog selesai dengan tombol `OK` yang mereset form.
-2. **Performa & Keandalan:** Autocomplete proyek memuat data sekali jalan lewat `LIST_PROJECT_NAMES` (`filterProjectsLocally`), `RawFileStreamer.httpClient` terpusat, serta menu **⚙️ Ganti URL Server** di layar Login.
-3. **Safe Area & Thumb-Zone:** Menerapkan `WindowInsetsCompat.Type.systemBars()` dan menempelkan bar **🚀 KIRIM FOTO** di bagian bawah layar (*sticky bottom thumb-zone*).
-4. **Rilis Lokal:** Hasil build signed APK terbaru tersimpan di `apk-release/dokproyek-uploader-release.apk`.
+### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.0.6` / `versionCode 7`)
+1. **UI Modern, Tidak Kaku, & Safe Area (`MainActivity.kt`):**
+   * Top App Bar `#0F172A` dengan badge akun mandor, kartu form putih bersudut membulat + label jelas, input lembut (`#F8FAFC`), kartu preview foto dengan thumbnail membulat + tombol hapus `[✕]`, *sticky bottom thumb-zone* berbayangan untuk tombol **🚀 KIRIM X FOTO**, dan `WindowInsetsCompat.Type.systemBars()`.
+2. **UX Lapangan & Kalender Indonesia:**
+   * Keyboard otomatis tertutup & fokus dibersihkan saat menekan **Pilih/Tambah Foto** maupun kembali dari Galeri.
+   * Kalender tanggal (`DatePickerDialog`) berbahasa Indonesia (`Locale("id", "ID")`), dan setelah upload selesai (klik **OK**), form + tanggal otomatis reset ke tanggal hari ini waktu Indonesia (`Asia/Jakarta` / WIB).
+   * Saat upload berjalan, tampil **spinner lingkaran amber besar** di samping status proses + garis progress animasi yang tetap bergerak hingga selesai, notifikasi background hilang bersih saat sukses.
+3. **Performa & Keandalan:** Autocomplete proyek memuat data sekali jalan lewat `LIST_PROJECT_NAMES` (dengan fallback otomatis ke `SEARCH_PROJECTS`), tampilan dropdown ringkas maksimal **5 baris terlihat** dan bisa di-scroll naik-turun, `RawFileStreamer.httpClient` terpusat, serta menu **⚙️ Ganti URL Server** di layar Login.
+4. **Rilis Lokal:** Hasil build signed APK terbaru selalu di-download dan dinamai sesuai versi di `apk-release/` (terbaru: `apk-release/dokproyek-uploader-v1.0.6.apk`).
 
 ### E. Catatan Deploy & Backlog
 * **Deploy Manual GAS:** Setiap perubahan pada `backend-gas/` wajib disalin ke editor Google Apps Script lalu di-deploy sebagai **New version** (*Deploy > Manage deployments > Edit > Version: New version > Deploy*), termasuk menjalankan `initVendorMaster()` 1x untuk mengaktifkan trigger harian.
 * **Backlog:** Penambahan WA Gateway berbayar (Fonnte/Wablas) di `Config.gs` bila suatu saat dibutuhkan pengiriman otomatis langsung ke nomor WhatsApp konsumen.
-  * Mendukung `"EMPTY_TRASH_PERMANENT"` (khusus Admin konsumen untuk menghapus permanen file di *Trash* folder proyek mereka guna membebaskan kuota penyimpanan) dan `"GET_STORAGE_STATUS"` (mengembalikan `usedGb`, `limitGb`, `percent`, dan `billingDueDate` untuk ditampilkan pada bar penyimpanan Web App & APK).
