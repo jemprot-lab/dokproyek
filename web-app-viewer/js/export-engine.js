@@ -4,6 +4,30 @@
  */
 
 const ExportEngine = {
+  async downloadBatchJpg(selectedPhotos, onProgress) {
+    if (!selectedPhotos.length) return;
+    for (let i = 0; i < selectedPhotos.length; i++) {
+      const p = selectedPhotos[i];
+      if (onProgress) onProgress(`Mengunduh JPG ${i + 1}/${selectedPhotos.length}: ${p.name}...`);
+      const res = await callGasApi('GET_PHOTO_BLOB', { fileId: p.id });
+      if (res.status === 'success' && res.base64Data) {
+        const byteChars = atob(res.base64Data);
+        const byteNumbers = new Array(byteChars.length);
+        for (let j = 0; j < byteChars.length; j++) {
+          byteNumbers[j] = byteChars.charCodeAt(j);
+        }
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: res.mimeType || 'image/jpeg' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = res.fileName || p.name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+    if (onProgress) onProgress('');
+  },
+
   async downloadBatchZip(selectedPhotos, projectName, subFolderName, onProgress) {
     if (!selectedPhotos.length) return;
     if (typeof JSZip === 'undefined') {

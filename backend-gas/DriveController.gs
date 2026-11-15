@@ -78,6 +78,10 @@ function handleSearchProjects(payload) {
     rows = readSheetRows(CONFIG.SHEETS.PROJECT_CACHE);
   }
 
+  rows.sort(function (a, b) {
+    return String(b.Last_Updated || '').localeCompare(String(a.Last_Updated || ''));
+  });
+
   var results = [];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -88,15 +92,19 @@ function handleSearchProjects(payload) {
       if (access.allowedProjects.indexOf(r.Folder_ID_GDrive) === -1) continue;
     }
 
-    if (query && String(r.Nama_Proyek).toLowerCase().indexOf(query) === -1) {
-      continue;
-    }
-
     var subs = [];
     try {
       subs = JSON.parse(r.Sub_Folders_JSON || '[]');
     } catch (e) {
       subs = [];
+    }
+
+    if (query) {
+      var matchProj = String(r.Nama_Proyek).toLowerCase().indexOf(query) !== -1;
+      var matchSub = subs.some(function (s) {
+        return String(s.name || '').toLowerCase().indexOf(query) !== -1;
+      });
+      if (!matchProj && !matchSub) continue;
     }
 
     results.push({

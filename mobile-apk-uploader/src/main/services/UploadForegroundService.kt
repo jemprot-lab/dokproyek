@@ -134,10 +134,15 @@ class UploadForegroundService : Service() {
                 "⚠️ Sinyal lemah. $failedCount foto masih menunggu sinyal."
             }
 
-            updateNotification(finalMsg, total, total)
             broadcastStatus(finalMsg, total, total, isDone = true, hasNetworkError = failedCount > 0)
             vibrateShort()
-            stopForeground(STOP_FOREGROUND_DETACH)
+            if (failedCount == 0) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIF_ID)
+            } else {
+                updateNotification(finalMsg, total, total)
+                stopForeground(STOP_FOREGROUND_DETACH)
+            }
             stopSelf()
         }
 

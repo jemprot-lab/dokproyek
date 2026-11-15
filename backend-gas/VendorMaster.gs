@@ -38,6 +38,7 @@ function initVendorMaster() {
     sheet.getRange(1, 1, 1, TENANTS_HEADERS.length).setFontWeight('bold').setBackground('#0F172A').setFontColor('#F59E0B');
     sheet.setFrozenRows(1);
   }
+  sheet.getRange('E2:F1000').setNumberFormat('0.00');
 
   // Pasang trigger otomatis (hapus duplikat lama dulu)
   var triggers = ScriptApp.getProjectTriggers();
@@ -186,6 +187,17 @@ function menuUpgradeQuota() {
   SpreadsheetApp.getUi().alert('✅ Kuota di-upgrade ke ' + newGb + ' GB.');
 }
 
+function parseSafeGbNumber(val, fallback) {
+  if (val instanceof Date) {
+    // Jika Google Sheets lokal Indonesia salah mengartikan "2.5" sebagai tanggal 2 Mei
+    return parseFloat(val.getDate() + '.' + (val.getMonth() + 1));
+  }
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  var cleaned = String(val || '').trim().replace(',', '.');
+  var num = parseFloat(cleaned);
+  return isNaN(num) ? fallback : num;
+}
+
 function parseDmyDate(str) {
   var m = String(str || '').trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (!m) return null;
@@ -227,8 +239,8 @@ function checkTenantQuotaAndBilling(additionalBytes) {
       return { allowed: true, usedGb: 0, limitGb: 999, percent: 0, subscriptionStatus: 'ACTIVE', vendorContactWa: CONFIG.VENDOR_CONTACT_WA };
     }
     t = {
-      Quota_Limit_GB: Number(row.Quota_Limit_GB || 5),
-      Used_Storage_GB: Number(row.Used_Storage_GB || 0),
+      Quota_Limit_GB: parseSafeGbNumber(row.Quota_Limit_GB, 5),
+      Used_Storage_GB: parseSafeGbNumber(row.Used_Storage_GB, 0),
       Billing_Due_Date: String(row.Billing_Due_Date || ''),
       Subscription_Status: String(row.Subscription_Status || 'ACTIVE').toUpperCase(),
       Alert_90_Sent: Boolean(row.Alert_90_Sent)

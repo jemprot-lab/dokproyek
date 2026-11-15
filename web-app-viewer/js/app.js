@@ -12,6 +12,11 @@ const App = {
   selectedIds: new Set(),
   onlyStarred: false,
   deferredPwaPrompt: null,
+  projectPage: 1,
+  projectsPerPage: 8,
+  expandedProjectId: null,
+  subPage: 1,
+  subsPerPage: 5,
 
   async init() {
     this.registerPwa();
@@ -170,38 +175,90 @@ const App = {
 
   renderSidebarProjects() {
     const list = document.getElementById('sidebar-projects');
+    const pagEl = document.getElementById('sidebar-pagination');
     if (!list) return;
 
-    list.innerHTML = this.projects.map((p) => {
-      const isSelected = this.currentProject && this.currentProject.folderId === p.folderId;
-      const statusBadge = p.projectStatus === 'ARCHIVED'
-        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">📦 ARSIP</span>'
-        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">🟢 AKTIF</span>';
+    const totalProjPages = Math.max(1, Math.ceil(this.projects.length / this.projectsPerPage));
+    if (this.projectPage > totalProjPages) this.projectPage = totalProjPages;
+    const startIdx = (this.projectPage - 1) * this.projectsPerPage;
+    const pageProjects = this.projects.slice(startIdx, startIdx + this.projectsPerPage);
 
-      const subsHtml = isSelected
-        ? `<div class="mt-2 pl-3 border-l-2 border-amber-400 space-y-1">
-            ${p.subFolders.map((s) => `
+    list.innerHTML = pageProjects.map((p) => {
+      const isExpanded = this.expandedProjectId === p.folderId;
+      const statusBadge = p.projectStatus === 'ARCHIVED'
+        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 shrink-0">📦 ARSIP</span>'
+        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">🟢 AKTIF</span>';
+
+      let subsHtml = '';
+      if (isExpanded) {
+        const allSubs = p.subFolders || [];
+        const totalSubPages = Math.max(1, Math.ceil(allSubs.length / this.subsPerPage));
+        if (this.subPage > totalSubPages) this.subPage = totalSubPages;
+        const subStart = (this.subPage - 1) * this.subsPerPage;
+        const pageSubs = allSubs.slice(subStart, subStart + this.subsPerPage);
+
+        const subPaginationHtml = totalSubPages > 1
+          ? `<div class="flex items-center justify-between pt-1.5 text-[11px] text-slate-500">
+              <button onclick="event.stopPropagation(); App.changeSubPage(-1)" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200" ${this.subPage <= 1 ? 'disabled' : ''}>‹</button>
+              <span>Hal ${this.subPage}/${totalSubPages}</span>
+              <button onclick="event.stopPropagation(); App.changeSubPage(1)" class="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200" ${this.subPage >= totalSubPages ? 'disabled' : ''}>›</button>
+            </div>`
+          : '';
+
+        subsHtml = `<div class="mt-2 pl-3 border-l-2 border-amber-400 space-y-1">
+            ${pageSubs.map((s) => `
               <button onclick="App.selectSubFolder('${s.subId}')" class="w-full text-left px-2.5 py-2 rounded-lg text-xs flex justify-between items-center ${this.currentSubFolder?.subId === s.subId ? 'bg-amber-500 text-slate-900 font-bold' : 'text-slate-600 hover:bg-slate-100'}">
                 <span class="truncate">${s.subName}</span>
                 <span class="ml-2 text-[11px] opacity-75">${s.count}</span>
               </button>
             `).join('') || '<div class="text-xs text-slate-400 py-1">Belum ada folder tanggal.</div>'}
-          </div>`
-        : '';
+            ${subPaginationHtml}
+          </div>`;
+      }
 
       return `
-        <div class="p-2.5 rounded-xl border ${isSelected ? 'border-amber-500 bg-amber-50/40' : 'border-slate-200 bg-white'}">
+        <div class="p-2.5 rounded-xl border ${isExpanded ? 'border-amber-500 bg-amber-50/40' : 'border-slate-200 bg-white'}">
           <div class="flex items-center justify-between gap-2 cursor-pointer" onclick="App.selectProject('${p.folderId}')">
-            <span class="font-semibold text-sm text-slate-900 truncate">📂 ${p.projectName}</span>
+            <span class="font-semibold text-sm text-slate-900 truncate">${isExpanded ? '📂' : '📁'} ${p.projectName}</span>
             ${statusBadge}
           </div>
           ${subsHtml}
         </div>
       `;
     }).join('') || '<div class="text-sm text-slate-400 text-center py-6">Tidak ada proyek ditemukan.</div>';
+
+    if (pagEl) {
+      if (totalProjPages > 1) {
+        pagEl.classList.remove('hidden');
+        pagEl.innerHTML = `
+          <button onclick="App.changeProjectPage(-1)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold" ${this.projectPage <= 1 ? 'disabled' : ''}>‹ Sebelumnya</button>
+          <span class="text-slate-600 font-semibold">Hal ${this.projectPage} / ${totalProjPages}</span>
+          <button onclick="App.changeProjectPage(1)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-semibold" ${this.projectPage >= totalProjPages ? 'disabled' : ''}>Berikutnya ›</button>
+        `;
+      } else {
+        pagEl.classList.add('hidden');
+      }
+    }
+  },
+
+  changeProjectPage(delta) {
+    this.projectPage += delta;
+    this.renderSidebarProjects();
+  },
+
+  changeSubPage(delta) {
+    this.subPage += delta;
+    this.renderSidebarProjects();
   },
 
   selectProject(folderId) {
+    if (this.expandedProjectId === folderId) {
+      this.expandedProjectId = null;
+      this.renderSidebarProjects();
+      return;
+    }
+    this.expandedProjectId = folderId;
+    this.subPage = 1;
     this.currentProject = this.projects.find((p) => p.folderId === folderId) || null;
     this.currentSubFolder = null;
     this.photos = [];
@@ -268,7 +325,7 @@ const App = {
       return `
         <div class="bg-white rounded-xl border ${checked ? 'border-amber-500 ring-2 ring-amber-400' : 'border-slate-200'} overflow-hidden shadow-sm flex flex-col">
           <div class="relative aspect-[4/3] bg-slate-900 cursor-pointer" onclick="LightboxWorkstation.open(App.photos, ${idx})">
-            <img src="${p.thumbnailUrl || p.previewUrl}" loading="lazy" alt="${p.name}" class="w-full h-full object-cover">
+            <img src="${p.thumbnailUrl || p.previewUrl}" onerror="App.fallbackThumbnail(this, '${p.id}')" loading="lazy" alt="${p.name}" class="w-full h-full object-cover">
             <div class="absolute top-2 left-2 flex gap-1" onclick="event.stopPropagation()">
               <input type="checkbox" ${checked ? 'checked' : ''} onchange="App.toggleSelect('${p.id}')" class="w-5 h-5 accent-amber-500 rounded cursor-pointer">
             </div>
@@ -293,6 +350,13 @@ const App = {
     }).join('');
   },
 
+  async fallbackThumbnail(imgEl, fileId) {
+    if (imgEl.dataset.fallbackTried) return;
+    imgEl.dataset.fallbackTried = '1';
+    const dataUrl = await LightboxWorkstation.fetchPhotoDataUrl({ id: fileId });
+    if (dataUrl) imgEl.src = dataUrl;
+  },
+
   toggleSelect(fileId) {
     if (this.selectedIds.has(fileId)) {
       this.selectedIds.delete(fileId);
@@ -303,9 +367,26 @@ const App = {
     this.renderPhotoGrid();
   },
 
+  toggleSelectAll() {
+    if (!this.photos.length) return;
+    if (this.selectedIds.size === this.photos.length) {
+      this.selectedIds.clear();
+    } else {
+      this.photos.forEach((p) => this.selectedIds.add(p.id));
+    }
+    this.updateSelectionBar();
+    this.renderPhotoGrid();
+  },
+
   updateSelectionBar() {
     const bar = document.getElementById('floating-action-bar');
     const count = this.selectedIds.size;
+    const btnAll = document.getElementById('btn-select-all');
+    if (btnAll) {
+      btnAll.textContent = (this.photos.length > 0 && count === this.photos.length)
+        ? '☐ Batal Pilih'
+        : '☑️ Pilih Semua';
+    }
     if (count > 0) {
       bar.classList.remove('hidden');
       document.getElementById('selected-count-label').textContent = `${count} foto dipilih`;
@@ -343,6 +424,14 @@ const App = {
       this.currentProject = null;
       await this.loadProjects(false);
     }
+  },
+
+  async onBatchJpg() {
+    const statusEl = document.getElementById('export-status');
+    await ExportEngine.downloadBatchJpg(
+      this.getSelectedPhotos(),
+      (msg) => { statusEl.textContent = msg; }
+    );
   },
 
   async onBatchZip() {

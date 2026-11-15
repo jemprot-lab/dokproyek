@@ -14,12 +14,15 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,7 +57,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etDate: EditText
     private lateinit var etNote: EditText
     private lateinit var tvPathBanner: TextView
+    private lateinit var btnPickGallery: Button
     private lateinit var tvPhotoSummary: TextView
+    private lateinit var previewContainer: LinearLayout
+    private lateinit var progressUpload: ProgressBar
     private lateinit var tvUploadStatus: TextView
     private lateinit var tvStorageBanner: TextView
     private lateinit var btnRetryBox: Button
@@ -68,13 +74,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Cara A: Tambah foto ke daftar yang sudah ada (anti-dobel)
     private val galleryLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         if (uris.isNotEmpty()) {
-            selectedUris.clear()
-            selectedUris.addAll(uris)
-            inspectSelectedPhotos()
+            val existing = selectedUris.map { it.toString() }.toHashSet()
+            for (u in uris) {
+                if (!existing.contains(u.toString())) {
+                    selectedUris.add(u)
+                    existing.add(u.toString())
+                }
+            }
+            refreshSelectedPhotosUi()
         }
     }
 
@@ -83,18 +95,33 @@ class MainActivity : AppCompatActivity() {
             when (intent?.action) {
                 UploadForegroundService.ACTION_PROGRESS -> {
                     val msg = intent.getStringExtra("message") ?: ""
+                    val current = intent.getIntExtra("current", 0)
+                    val total = intent.getIntExtra("total", 1).coerceAtLeast(1)
                     val isDone = intent.getBooleanExtra("isDone", false)
                     val hasErr = intent.getBooleanExtra("hasNetworkError", false)
+
+                    progressUpload.visibility = if (isDone) View.GONE else View.VISIBLE
+                    progressUpload.max = total
+                    progressUpload.progress = current
+                    progressUpload.isIndeterminate = !isDone && current == 0
+
                     tvUploadStatus.visibility = View.VISIBLE
                     tvUploadStatus.text = msg
                     tvUploadStatus.setBackgroundColor(
                         if (hasErr) Color.parseColor("#FEF3C7") else Color.parseColor("#DCFCE7")
                     )
                     btnRetryBox.visibility = if (hasErr) View.VISIBLE else View.GONE
-                    if (isDone) btnUpload.isEnabled = true
+
+                    if (isDone) {
+                        btnUpload.isEnabled = true
+                        if (!hasErr) {
+                            showCompletionDialogAndReset(msg)
+                        }
+                    }
                 }
                 UploadForegroundService.ACTION_QUOTA_BLOCKED -> {
                     val msg = intent.getStringExtra("message") ?: "🚫 Penyimpanan kantor sudah penuh."
+                    progressUpload.visibility = View.GONE
                     tvStorageBanner.visibility = View.VISIBLE
                     tvStorageBanner.text = msg
                     tvStorageBanner.setBackgroundColor(Color.parseColor("#FEE2E2"))
@@ -174,9 +201,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(24, 20, 24, 20)
         }
 
-        // Input 1: Cari Proyek Aktif
+        // Tanpa angka "1."
         actvProject = AutoCompleteTextView(this).apply {
-            hint = "1. Ketik / Pilih Nama Proyek"
+            hint = "Ketik / Pilih Nama Proyek"
             minHeight = 140
             threshold = 1
         }
@@ -205,18 +232,18 @@ class MainActivity : AppCompatActivity() {
             updatePathBanner()
         }
 
-        // Input 2: Tanggal Indonesia + Keterangan Manual
         val today = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Calendar.getInstance().time)
         etDate = EditText(this).apply {
             setText(today)
             isFocusable = false
             minHeight = 140
-            hint = "2. Tanggal Foto"
+            hint = "Tanggal Foto"
             setOnClickListener { openDatePicker() }
         }
 
+        // Tanpa angka "3."
         etNote = EditText(this).apply {
-            hint = "3. Keterangan (contoh: progress 10%)"
+            hint = "Keterangan (contoh: progress 10%)"
             minHeight = 140
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -232,7 +259,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(24, 24, 24, 24)
         }
 
-        val btnPickGallery = Button(this).apply {
+        btnPickGallery = Button(this).apply {
             text = "🖼️ PILIH FOTO DARI GALERI"
             textSize = 16f
             minHeight = 148
@@ -244,7 +271,12 @@ class MainActivity : AppCompatActivity() {
         tvPhotoSummary = TextView(this).apply {
             text = "Belum ada foto dipilih."
             textSize = 14f
-            setPadding(0, 16, 0, 24)
+            setPadding(0, 16, 0, 12)
+        }
+
+        previewContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 20)
         }
 
         btnUpload = Button(this).apply {
@@ -254,6 +286,12 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#F59E0B"))
             setTextColor(Color.parseColor("#0F172A"))
             setOnClickListener { startUploadService() }
+        }
+
+        progressUpload = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            visibility = View.GONE
+            isIndeterminate = true
+            setPadding(0, 20, 0, 8)
         }
 
         tvUploadStatus = TextView(this).apply {
@@ -280,7 +318,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(tvPathBanner)
         root.addView(btnPickGallery)
         root.addView(tvPhotoSummary)
+        root.addView(previewContainer)
         root.addView(btnUpload)
+        root.addView(progressUpload)
         root.addView(tvUploadStatus)
         root.addView(btnRetryBox)
 
@@ -306,15 +346,104 @@ class MainActivity : AppCompatActivity() {
         tvPathBanner.text = "📂 Folder Tujuan: $proj > $sub"
     }
 
-    private fun inspectSelectedPhotos() {
+    private fun refreshSelectedPhotosUi() {
+        previewContainer.removeAllViews()
+
+        if (selectedUris.isEmpty()) {
+            tvPhotoSummary.text = "Belum ada foto dipilih."
+            btnPickGallery.text = "🖼️ PILIH FOTO DARI GALERI"
+            btnUpload.text = "🚀 KIRIM 0 FOTO"
+            return
+        }
+
         var withGps = 0
         var noGps = 0
-        for (uri in selectedUris) {
+
+        for (idx in selectedUris.indices) {
+            val uri = selectedUris[idx]
             val info = ExifBadge.inspect(this, uri)
             if (info.hasGps) withGps++ else noGps++
+
+            val (fileName, _) = RawFileStreamer.getFileNameAndSize(this, uri)
+            val rowCard = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundColor(Color.WHITE)
+                setPadding(16, 12, 16, 12)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                lp.setMargins(0, 0, 0, 12)
+                layoutParams = lp
+            }
+
+            val thumb = ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(140, 140)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageURI(uri)
+            }
+
+            val textCol = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setPadding(20, 0, 12, 0)
+            }
+
+            val tvName = TextView(this).apply {
+                text = fileName
+                textSize = 13f
+                setTextColor(Color.parseColor("#0F172A"))
+                maxLines = 1
+            }
+
+            val tvBadge = TextView(this).apply {
+                text = info.badgeText
+                textSize = 12f
+                setTextColor(
+                    if (info.hasGps) Color.parseColor("#10B981") else Color.parseColor("#F97316")
+                )
+            }
+
+            val btnRemove = Button(this).apply {
+                text = "✕"
+                textSize = 14f
+                setBackgroundColor(Color.parseColor("#FEE2E2"))
+                setTextColor(Color.parseColor("#EF4444"))
+                layoutParams = LinearLayout.LayoutParams(110, 110)
+                setOnClickListener {
+                    selectedUris.removeAt(idx)
+                    refreshSelectedPhotosUi()
+                }
+            }
+
+            textCol.addView(tvName)
+            textCol.addView(tvBadge)
+            rowCard.addView(thumb)
+            rowCard.addView(textCol)
+            rowCard.addView(btnRemove)
+            previewContainer.addView(rowCard)
         }
+
         tvPhotoSummary.text = "Dipilih ${selectedUris.size} foto:\n📍 Lokasi Ada: $withGps foto\n⚠️ Tanpa Lokasi (Tetap Bisa Kirim): $noGps foto"
+        btnPickGallery.text = "➕ TAMBAH FOTO DARI GALERI"
         btnUpload.text = "🚀 KIRIM ${selectedUris.size} FOTO"
+    }
+
+    private fun showCompletionDialogAndReset(msg: String) {
+        AlertDialog.Builder(this)
+            .setTitle("✅ Pengiriman Selesai")
+            .setMessage(msg)
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ ->
+                actvProject.setText("")
+                etNote.setText("")
+                selectedUris.clear()
+                refreshSelectedPhotosUi()
+                updatePathBanner()
+                tvUploadStatus.visibility = View.GONE
+                progressUpload.visibility = View.GONE
+            }.show()
     }
 
     private fun startUploadService() {
@@ -332,6 +461,11 @@ class MainActivity : AppCompatActivity() {
 
         btnUpload.isEnabled = false
         btnRetryBox.visibility = View.GONE
+        progressUpload.visibility = View.VISIBLE
+        progressUpload.isIndeterminate = true
+        tvUploadStatus.visibility = View.VISIBLE
+        tvUploadStatus.text = "⏳ Memulai pengiriman ${uriStrings.size} foto..."
+
         val svcIntent = Intent(this, UploadForegroundService::class.java).apply {
             putStringArrayListExtra(UploadForegroundService.EXTRA_URIS, uriStrings)
             putExtra(UploadForegroundService.EXTRA_PROJECT, proj)
