@@ -1,8 +1,10 @@
-const CACHE_NAME = 'dokproyek-pwa-v1';
+const CACHE_NAME = 'dokproyek-pwa-v2';
 const SHELL_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './assets/icon-192.png',
+  './assets/icon-512.png',
   './css/styles.css',
   './js/api-client.js',
   './js/app.js',
