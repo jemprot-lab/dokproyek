@@ -488,7 +488,13 @@ function handleAdminFileOps(payload) {
           });
           (res.files || []).forEach(function (f) {
             if (f.trashed) {
-              Drive.Files.delete(f.id);
+              if (typeof Drive.Files.remove === 'function') {
+                Drive.Files.remove(f.id);
+              } else if (typeof Drive.Files['delete'] === 'function') {
+                Drive.Files['delete'](f.id);
+              } else {
+                throw new Error('Fungsi hapus permanen Drive API tidak tersedia.');
+              }
               purgedCount++;
             } else if (f.mimeType === 'application/vnd.google-apps.folder') {
               queue.push(f.id);
