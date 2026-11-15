@@ -82,6 +82,28 @@ function handleSearchProjects(payload) {
     return String(b.Last_Updated || '').localeCompare(String(a.Last_Updated || ''));
   });
 
+  var isAdmin = access.role === 'ADMIN';
+  var auditUploaderMap = null;
+  function getAuditUploaders(projectName, subName) {
+    if (!auditUploaderMap) {
+      auditUploaderMap = {};
+      var logs = readSheetRows(CONFIG.SHEETS.AUDIT_LOGS);
+      for (var li = 0; li < logs.length; li++) {
+        if (String(logs[li].Action_Type || '') !== 'UPLOAD') continue;
+        var detail = String(logs[li].Details || '');
+        if (detail.indexOf('Tersimpan ke ') !== 0) continue;
+        var key = detail.substring(13);
+        var actor = String(logs[li].Actor || '').trim();
+        if (!actor || actor === 'SYSTEM') continue;
+        if (!auditUploaderMap[key]) auditUploaderMap[key] = [];
+        if (auditUploaderMap[key].indexOf(actor) === -1) {
+          auditUploaderMap[key].push(actor);
+        }
+      }
+    }
+    return auditUploaderMap[projectName + ' > ' + subName] || [];
+  }
+
   var results = [];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -119,7 +141,14 @@ function handleSearchProjects(payload) {
       projectStatus: pStatus,
       lastUpdated: r.Last_Updated,
       subFolders: subs.map(function (s) {
-        return { subId: s.id, subName: s.name, count: s.count || 0 };
+        var item = { subId: s.id, subName: s.name, count: s.count || 0 };
+        if (isAdmin) {
+          var list = (s.uploaders && s.uploaders.length)
+            ? s.uploaders
+            : getAuditUploaders(r.Nama_Proyek, s.name);
+          if (list.length) item.uploaders = list;
+        }
+        return item;
       })
     });
 
@@ -214,6 +243,7 @@ function handleUploadPhotoRaw(payload) {
     var blob = Utilities.newBlob(rawBytes, mimeType, fileName);
     var savedFile = subFolder.createFile(blob);
 
+    recordSubFolderUploader(subFolder, access.actor);
     syncProjectCacheFromDrive(projectFolder);
     recordTenantUploadBytes(savedFile.getSize());
     appendAuditLog(access.actor, 'UPLOAD', fileName, 'Tersimpan ke ' + projectName + ' > ' + subFolderName);

@@ -134,6 +134,36 @@ function appendAuditLog(actor, actionType, targetItems, details) {
 }
 
 /**
+ * Membaca daftar username pengirim (uploader) dari deskripsi folder Drive.
+ */
+function parseSubFolderUploaders(descriptionText) {
+  var raw = String(descriptionText || '').trim();
+  if (!raw) return [];
+  try {
+    var parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.uploaders)) {
+      return parsed.uploaders.filter(function (u) {
+        return typeof u === 'string' && u.trim() !== '';
+      });
+    }
+  } catch (e) {}
+  return [];
+}
+
+/**
+ * Menyimpan username pengirim ke deskripsi sub-folder Drive (tanpa duplikasi).
+ */
+function recordSubFolderUploader(subFolder, actorName) {
+  var actor = String(actorName || '').trim();
+  if (!actor || !subFolder) return;
+  var list = parseSubFolderUploaders(subFolder.getDescription());
+  if (list.indexOf(actor) === -1) {
+    list.push(actor);
+    subFolder.setDescription(JSON.stringify({ uploaders: list }));
+  }
+}
+
+/**
  * Menyinkronkan cache folder proyek & sub-folder dari Google Drive ke Project_Cache.
  */
 function syncProjectCacheFromDrive(projectFolder) {
@@ -154,7 +184,8 @@ function syncProjectCacheFromDrive(projectFolder) {
     subFolders.push({
       id: sub.getId(),
       name: sub.getName(),
-      count: count
+      count: count,
+      uploaders: parseSubFolderUploaders(sub.getDescription())
     });
   }
 

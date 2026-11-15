@@ -302,7 +302,11 @@ const App = {
     } else {
       this.projects = this.allProjects.filter((p) => {
         if ((p.projectName || '').toLowerCase().includes(q)) return true;
-        return (p.subFolders || []).some((s) => (s.subName || '').toLowerCase().includes(q));
+        return (p.subFolders || []).some(
+          (s) =>
+            (s.subName || '').toLowerCase().includes(q) ||
+            (s.uploaders || []).some((u) => u.toLowerCase().includes(q))
+        );
       });
     }
     this.renderSidebarProjects();
@@ -444,15 +448,33 @@ const App = {
       return;
     }
     const isAdmin = SessionState.isAdmin();
-    grid.innerHTML = subs.map((s) => `
+    const esc = (str) =>
+      String(str || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[ch]));
+
+    grid.innerHTML = subs.map((s) => {
+      const uploaderBadge =
+        isAdmin && s.uploaders && s.uploaders.length
+          ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">👤 ${esc(s.uploaders.join(', '))}</span>`
+          : '';
+      return `
       <div onclick="App.selectSubFolder('${s.subId}')" class="bg-white rounded-xl border border-slate-200 hover:border-amber-500 hover:shadow-md p-4 cursor-pointer transition flex items-center justify-between gap-3">
         <div class="min-w-0">
-          <div class="font-bold text-slate-900 truncate">📂 ${s.subName}</div>
-          <div class="text-xs text-slate-500 mt-1">📷 ${s.count} foto</div>
+          <div class="font-bold text-slate-900 truncate">📂 ${esc(s.subName)}</div>
+          <div class="flex flex-wrap items-center gap-2 mt-1.5">
+            <span class="text-xs text-slate-500">📷 ${s.count} foto</span>
+            ${uploaderBadge}
+          </div>
         </div>
         ${isAdmin ? `<button onclick="event.stopPropagation(); App.onDeleteSubFolder('${s.subId}', '${s.subName.replace(/'/g, "\\'")}')" title="Hapus folder keterangan" class="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold shrink-0">🗑️</button>` : ''}
       </div>
-    `).join('');
+    `;
+    }).join('');
   },
 
   toggleMobileSidebar() {
@@ -475,8 +497,12 @@ const App = {
 
   async loadPhotos() {
     if (!this.currentSubFolder) return;
+    const uploaderSuffix =
+      SessionState.isAdmin() && this.currentSubFolder.uploaders && this.currentSubFolder.uploaders.length
+        ? ` • 👤 ${this.currentSubFolder.uploaders.join(', ')}`
+        : '';
     document.getElementById('gallery-header-title').textContent =
-      `${this.currentProject.projectName} › ${this.currentSubFolder.subName}`;
+      `${this.currentProject.projectName} › ${this.currentSubFolder.subName}${uploaderSuffix}`;
     document.getElementById('photo-grid').innerHTML =
       '<div class="col-span-full text-center py-12 text-slate-500">⏳ Memuat foto...</div>';
 
