@@ -5,6 +5,7 @@
  */
 
 const App = {
+  allProjects: [],
   projects: [],
   currentProject: null,
   currentSubFolder: null,
@@ -91,7 +92,8 @@ const App = {
 
     card.classList.remove('hidden');
     text.textContent = `${Number(s.usedGb || 0).toFixed(2)} / ${s.limitGb} GB (${s.percent}%)`;
-    due.textContent = s.billingDueDate ? `Jatuh tempo: ${s.billingDueDate}` : '';
+    const dueFormatted = this.formatIndonesianDate(s.billingDueDate);
+    due.textContent = dueFormatted ? `Jatuh tempo: ${dueFormatted}` : '';
 
     const pct = Math.min(100, Math.max(0, s.percent || 0));
     bar.style.width = `${pct}%`;
@@ -143,14 +145,32 @@ const App = {
     }
   },
 
+  formatIndonesianDate(rawDate) {
+    if (!rawDate) return '';
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const str = String(rawDate).trim();
+    const dmy = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (dmy) {
+      const mIdx = parseInt(dmy[2], 10) - 1;
+      if (months[mIdx]) return `${parseInt(dmy[1], 10)} ${months[mIdx]} ${dmy[3]}`;
+    }
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return `${parsed.getDate()} ${months[parsed.getMonth()]} ${parsed.getFullYear()}`;
+    }
+    return str;
+  },
+
   async loadProjects(incrementMagicView = false) {
-    const query = document.getElementById('project-search-input')?.value.trim() || '';
     const includeArchived = document.getElementById('toggle-archived')?.checked || false;
 
     const res = await callGasApi('SEARCH_PROJECTS', {
-      query,
+      query: '',
       includeArchived,
-      limit: SessionState.isAdmin() ? 50 : 5,
+      limit: SessionState.isAdmin() ? 200 : 50,
       incrementView: incrementMagicView
     });
 
@@ -165,12 +185,26 @@ const App = {
       banner.textContent = `🔗 Akses Tamu: ${res.magicLinkInfo.labelPenerima} (Aktif s/d ${res.magicLinkInfo.expiryDate} WIB)`;
     }
 
-    this.projects = res.projects || [];
-    this.renderSidebarProjects();
+    this.allProjects = res.projects || [];
+    this.filterProjectsLocally();
 
     if (this.projects.length > 0 && !this.currentProject) {
       this.selectProject(this.projects[0].folderId);
     }
+  },
+
+  filterProjectsLocally() {
+    const q = (document.getElementById('project-search-input')?.value || '').trim().toLowerCase();
+    this.projectPage = 1;
+    if (!q) {
+      this.projects = [...this.allProjects];
+    } else {
+      this.projects = this.allProjects.filter((p) => {
+        if ((p.projectName || '').toLowerCase().includes(q)) return true;
+        return (p.subFolders || []).some((s) => (s.subName || '').toLowerCase().includes(q));
+      });
+    }
+    this.renderSidebarProjects();
   },
 
   renderSidebarProjects() {
@@ -265,12 +299,35 @@ const App = {
     this.selectedIds.clear();
     this.updateSelectionBar();
     this.renderSidebarProjects();
+    this.renderSubFolderCards();
+  },
 
-    if (this.currentProject && this.currentProject.subFolders.length > 0) {
-      this.selectSubFolder(this.currentProject.subFolders[0].subId);
-    } else {
-      this.renderPhotoGrid();
+  renderSubFolderCards() {
+    const grid = document.getElementById('photo-grid');
+    const titleEl = document.getElementById('gallery-header-title');
+    if (!this.currentProject) {
+      if (titleEl) titleEl.textContent = 'Pilih Proyek';
+      grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400">Pilih proyek di sidebar kiri.</div>';
+      return;
     }
+    if (titleEl) {
+      titleEl.textContent = `📁 ${this.currentProject.projectName} — Pilih Folder Keterangan`;
+    }
+    const subs = this.currentProject.subFolders || [];
+    if (!subs.length) {
+      grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400">Belum ada folder keterangan di proyek ini.</div>';
+      return;
+    }
+    const isAdmin = SessionState.isAdmin();
+    grid.innerHTML = subs.map((s) => `
+      <div onclick="App.selectSubFolder('${s.subId}')" class="bg-white rounded-xl border border-slate-200 hover:border-amber-500 hover:shadow-md p-4 cursor-pointer transition flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="font-bold text-slate-900 truncate">📂 ${s.subName}</div>
+          <div class="text-xs text-slate-500 mt-1">📷 ${s.count} foto</div>
+        </div>
+        ${isAdmin ? `<button onclick="event.stopPropagation(); App.onDeleteSubFolder('${s.subId}', '${s.subName.replace(/'/g, "\\'")}')" title="Hapus folder keterangan" class="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold shrink-0">🗑️</button>` : ''}
+      </div>
+    `).join('');
   },
 
   async selectSubFolder(subId) {
@@ -423,6 +480,44 @@ const App = {
     if (await AdminManager.toggleArchiveProject(this.currentProject.folderId, this.currentProject.projectStatus)) {
       this.currentProject = null;
       await this.loadProjects(false);
+    }
+  },
+
+  async onDeleteCurrentProject() {
+    if (!this.currentProject) {
+      alert('Pilih proyek terlebih dahulu.');
+      return;
+    }
+    if (await AdminManager.deleteFolder(this.currentProject.folderId, this.currentProject.projectName, true)) {
+      this.currentProject = null;
+      this.currentSubFolder = null;
+      this.expandedProjectId = null;
+      this.photos = [];
+      await this.loadProjects(false);
+      this.renderSubFolderCards();
+    }
+  },
+
+  async onDeleteCurrentSubFolder() {
+    if (!this.currentSubFolder) {
+      alert('Pilih folder keterangan terlebih dahulu.');
+      return;
+    }
+    await this.onDeleteSubFolder(this.currentSubFolder.subId, this.currentSubFolder.subName);
+  },
+
+  async onDeleteSubFolder(subId, subName) {
+    if (await AdminManager.deleteFolder(subId, subName, false)) {
+      const activeProjId = this.currentProject?.folderId;
+      this.currentSubFolder = null;
+      this.photos = [];
+      await this.loadProjects(false);
+      if (activeProjId) {
+        this.currentProject = this.allProjects.find((p) => p.folderId === activeProjId) || null;
+        this.expandedProjectId = this.currentProject ? activeProjId : null;
+      }
+      this.renderSidebarProjects();
+      this.renderSubFolderCards();
     }
   },
 

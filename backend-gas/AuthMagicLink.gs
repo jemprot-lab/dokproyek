@@ -308,7 +308,17 @@ function handleManageMagicLink(payload) {
   return withScriptLock(function () {
     var projectRows = readSheetRows(CONFIG.SHEETS.PROJECT_CACHE);
     var projectMap = {};
-    projectRows.forEach(function (p) { projectMap[p.Folder_ID_GDrive] = p.Nama_Proyek; });
+    projectRows.forEach(function (p) {
+      projectMap[p.Folder_ID_GDrive] = p.Nama_Proyek;
+      try {
+        var subs = JSON.parse(p.Sub_Folders_JSON || '[]');
+        subs.forEach(function (s) {
+          if (s && s.id) {
+            projectMap[s.id] = p.Nama_Proyek + ' › ' + s.name;
+          }
+        });
+      } catch (e) {}
+    });
 
     var rows = readSheetRows(CONFIG.SHEETS.MAGIC_LINKS);
 

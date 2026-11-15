@@ -198,8 +198,17 @@ function parseSafeGbNumber(val, fallback) {
   return isNaN(num) ? fallback : num;
 }
 
+function formatDueDateDmy(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, CONFIG.TIMEZONE, 'dd-MM-yyyy');
+  }
+  return String(val).trim();
+}
+
 function parseDmyDate(str) {
-  var m = String(str || '').trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  var dmy = formatDueDateDmy(str);
+  var m = dmy.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (!m) return null;
   return new Date(m[3] + '-' + m[2] + '-' + m[1] + 'T23:59:59+07:00');
 }
@@ -241,7 +250,7 @@ function checkTenantQuotaAndBilling(additionalBytes) {
     t = {
       Quota_Limit_GB: parseSafeGbNumber(row.Quota_Limit_GB, 5),
       Used_Storage_GB: parseSafeGbNumber(row.Used_Storage_GB, 0),
-      Billing_Due_Date: String(row.Billing_Due_Date || ''),
+      Billing_Due_Date: formatDueDateDmy(row.Billing_Due_Date),
       Subscription_Status: String(row.Subscription_Status || 'ACTIVE').toUpperCase(),
       Alert_90_Sent: Boolean(row.Alert_90_Sent)
     };

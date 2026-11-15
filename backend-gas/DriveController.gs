@@ -88,15 +88,21 @@ function handleSearchProjects(payload) {
     var pStatus = String(r.Project_Status || 'ACTIVE').toUpperCase();
     if (!includeArchived && pStatus !== 'ACTIVE') continue;
 
-    if (access.allowedProjects !== 'ALL') {
-      if (access.allowedProjects.indexOf(r.Folder_ID_GDrive) === -1) continue;
-    }
-
     var subs = [];
     try {
       subs = JSON.parse(r.Sub_Folders_JSON || '[]');
     } catch (e) {
       subs = [];
+    }
+
+    if (access.allowedProjects !== 'ALL') {
+      var projectAllowed = access.allowedProjects.indexOf(r.Folder_ID_GDrive) !== -1;
+      if (!projectAllowed) {
+        subs = subs.filter(function (s) {
+          return access.allowedProjects.indexOf(s.id) !== -1;
+        });
+        if (subs.length === 0) continue;
+      }
     }
 
     if (query) {
@@ -210,6 +216,23 @@ function handleListPhotos(payload) {
 
   var subFolderId = String(payload.subFolderId || '').trim();
   if (!subFolderId) return { status: 'error', message: 'subFolderId wajib diisi.' };
+
+  if (access.allowedProjects !== 'ALL') {
+    var directAllowed = access.allowedProjects.indexOf(subFolderId) !== -1;
+    if (!directAllowed) {
+      var parents = DriveApp.getFolderById(subFolderId).getParents();
+      var parentAllowed = false;
+      while (parents.hasNext()) {
+        if (access.allowedProjects.indexOf(parents.next().getId()) !== -1) {
+          parentAllowed = true;
+          break;
+        }
+      }
+      if (!parentAllowed) {
+        return { status: 'error', code: 'FORBIDDEN', message: 'Anda tidak memiliki izin membuka folder ini.' };
+      }
+    }
+  }
 
   var onlyStarred = Boolean(payload.onlyStarred) || access.photoFilter === 'STARRED_ONLY';
   var q = "'" + subFolderId + "' in parents and trashed = false and mimeType contains 'image/'";
@@ -430,6 +453,34 @@ function handleAdminFileOps(payload) {
     if (op === 'GET_STORAGE_STATUS') {
       var statusInfo = checkTenantQuotaAndBilling(0);
       return { status: 'success', storage: statusInfo };
+    }
+
+    if (op === 'DELETE_FOLDER') {
+      var targetFolder = DriveApp.getFolderById(payload.targetFolderId);
+      var folderName = targetFolder.getName();
+      var parents = targetFolder.getParents();
+      var parent = parents.hasNext() ? parents.next() : null;
+      targetFolder.setTrashed(true);
+
+      if (parent && parent.getId() === CONFIG.ROOT_FOLDER_ID) {
+        var cacheSheet = getTenantSheet('Project_Cache');
+        var rows = cacheSheet.getDataRange().getValues();
+        for (var i = 1; i < rows.length; i++) {
+          if (String(rows[i][0]) === String(payload.targetFolderId)) {
+            cacheSheet.deleteRow(i + 1);
+            break;
+          }
+        }
+      } else if (parent) {
+        syncProjectCacheFromDrive(parent);
+      }
+
+      appendAuditLog(
+        userEmail,
+        'ADMIN_DELETE_FOLDER',
+        folderName + ' (ID: ' + payload.targetFolderId + ')'
+      );
+      return { status: 'success', message: 'Folder "' + folderName + '" dipindahkan ke Sampah.' };
     }
 
     return { status: 'error', message: 'Operasi admin tidak dikenali: ' + op };

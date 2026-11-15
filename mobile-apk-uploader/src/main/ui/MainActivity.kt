@@ -48,6 +48,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private val selectedUris = arrayListOf<Uri>()
+    private val allActiveProjects = mutableListOf<String>()
     private val projectSuggestions = mutableListOf<String>()
     private lateinit var projectAdapter: ArrayAdapter<String>
     private lateinit var authToken: String
@@ -158,7 +159,7 @@ class MainActivity : AppCompatActivity() {
 
         buildSingleScreenUi()
         checkAndShowFriendlyPermissionIntro()
-        searchActiveProjects("")
+        loadActiveProjectsOnce()
         checkStorageQuotaStatus()
     }
 
@@ -221,7 +222,7 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val q = s?.toString()?.trim() ?: ""
-                searchActiveProjects(q)
+                filterProjectsLocally(q)
                 updatePathBanner()
             }
             override fun afterTextChanged(s: Editable?) {}
@@ -475,15 +476,15 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, svcIntent)
     }
 
-    private fun searchActiveProjects(query: String) {
+    private fun loadActiveProjectsOnce() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val payload = JSONObject().apply {
                     put("action", "SEARCH_PROJECTS")
                     put("authToken", authToken)
-                    put("query", query)
+                    put("query", "")
                     put("includeArchived", false)
-                    put("limit", 5)
+                    put("limit", 200)
                 }
                 val req = Request.Builder()
                     .url(RawFileStreamer.GAS_URL)
@@ -498,19 +499,31 @@ class MainActivity : AppCompatActivity() {
                         names.add(arr.getJSONObject(i).getString("projectName"))
                     }
                     withContext(Dispatchers.Main) {
-                        projectSuggestions.clear()
-                        projectSuggestions.addAll(names)
-                        projectAdapter.notifyDataSetChanged()
-                        val exactMatch = names.any { it.equals(query, ignoreCase = true) }
-                        if (query.isNotEmpty() && !exactMatch) {
-                            btnCreateProject.visibility = View.VISIBLE
-                            btnCreateProject.text = "[+ Buat Proyek Baru: \"$query\"]"
-                        } else {
-                            btnCreateProject.visibility = View.GONE
-                        }
+                        allActiveProjects.clear()
+                        allActiveProjects.addAll(names)
+                        filterProjectsLocally(actvProject.text.toString().trim())
                     }
                 }
             } catch (_: Exception) {}
+        }
+    }
+
+    private fun filterProjectsLocally(query: String) {
+        val matches = if (query.isEmpty()) {
+            allActiveProjects.take(5)
+        } else {
+            allActiveProjects.filter { it.contains(query, ignoreCase = true) }.take(5)
+        }
+        projectSuggestions.clear()
+        projectSuggestions.addAll(matches)
+        projectAdapter.notifyDataSetChanged()
+
+        val exactMatch = allActiveProjects.any { it.equals(query, ignoreCase = true) }
+        if (query.isNotEmpty() && !exactMatch) {
+            btnCreateProject.visibility = View.VISIBLE
+            btnCreateProject.text = "[+ Buat Proyek Baru: \"$query\"]"
+        } else {
+            btnCreateProject.visibility = View.GONE
         }
     }
 

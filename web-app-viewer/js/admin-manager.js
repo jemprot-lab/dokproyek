@@ -9,12 +9,20 @@ const AdminManager = {
   magicLinks: [],
   usersList: [],
   selectedExpiryDays: 7,
+  selectedMagicProjectIds: new Set(),
+  selectedMagicSubIds: new Set(),
+  expandedMagicProjects: new Set(),
 
   // ========================
   // 1. MAGIC LINK MODAL
   // ========================
   async openMagicLinkModal(projects) {
     this.allProjects = projects || [];
+    this.selectedMagicProjectIds = new Set();
+    this.selectedMagicSubIds = new Set();
+    this.expandedMagicProjects = new Set();
+    const searchEl = document.getElementById('magic-project-search');
+    if (searchEl) searchEl.value = '';
     document.getElementById('magic-link-modal').classList.remove('hidden');
     this.switchMagicTab('create');
     this.renderMagicProjectCheckboxes();
@@ -46,15 +54,137 @@ const AdminManager = {
     }
   },
 
+  toggleMagicProjectExpand(projectId) {
+    if (this.expandedMagicProjects.has(projectId)) {
+      this.expandedMagicProjects.delete(projectId);
+    } else {
+      this.expandedMagicProjects.add(projectId);
+    }
+    this.renderMagicProjectCheckboxes();
+  },
+
+  toggleMagicProject(projectId, isChecked) {
+    const proj = this.allProjects.find((p) => p.folderId === projectId);
+    if (!proj) return;
+    const subs = proj.subFolders || [];
+    if (isChecked) {
+      this.selectedMagicProjectIds.add(projectId);
+      subs.forEach((s) => this.selectedMagicSubIds.add(s.subId));
+    } else {
+      this.selectedMagicProjectIds.delete(projectId);
+      subs.forEach((s) => this.selectedMagicSubIds.delete(s.subId));
+    }
+    this.renderMagicProjectCheckboxes();
+  },
+
+  toggleMagicSubFolder(projectId, subId, isChecked) {
+    const proj = this.allProjects.find((p) => p.folderId === projectId);
+    if (!proj) return;
+    if (isChecked) {
+      this.selectedMagicSubIds.add(subId);
+    } else {
+      this.selectedMagicSubIds.delete(subId);
+    }
+    const subs = proj.subFolders || [];
+    const allChecked = subs.length > 0 && subs.every((s) => this.selectedMagicSubIds.has(s.subId));
+    if (allChecked) {
+      this.selectedMagicProjectIds.add(projectId);
+    } else {
+      this.selectedMagicProjectIds.delete(projectId);
+    }
+    this.renderMagicProjectCheckboxes();
+  },
+
+  getSelectedMagicIdsPayload() {
+    const ids = [];
+    this.allProjects.forEach((p) => {
+      if (this.selectedMagicProjectIds.has(p.folderId)) {
+        ids.push(p.folderId);
+      } else {
+        (p.subFolders || []).forEach((s) => {
+          if (this.selectedMagicSubIds.has(s.subId)) ids.push(s.subId);
+        });
+      }
+    });
+    return ids;
+  },
+
   renderMagicProjectCheckboxes() {
     const box = document.getElementById('magic-projects-checkboxes');
+    const summaryEl = document.getElementById('magic-selection-summary');
     if (!box) return;
-    box.innerHTML = this.allProjects.map((p) => `
-      <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-        <input type="checkbox" value="${p.folderId}" class="magic-proj-cb w-4 h-4 accent-amber-500">
-        <span class="text-sm font-medium text-slate-800">${p.projectName}</span>
-      </label>
-    `).join('');
+
+    const q = (document.getElementById('magic-project-search')?.value || '').trim().toLowerCase();
+    const filtered = !q ? this.allProjects : this.allProjects.filter((p) => {
+      if ((p.projectName || '').toLowerCase().includes(q)) return true;
+      return (p.subFolders || []).some((s) => (s.subName || '').toLowerCase().includes(q));
+    });
+
+    const indeterminateIds = [];
+    box.innerHTML = filtered.map((p) => {
+      const subs = p.subFolders || [];
+      const projMatch = !q || (p.projectName || '').toLowerCase().includes(q);
+      const visibleSubs = projMatch ? subs : subs.filter((s) => (s.subName || '').toLowerCase().includes(q));
+      const isExpanded = this.expandedMagicProjects.has(p.folderId) || (q && !projMatch && visibleSubs.length > 0);
+      const checkedSubCount = subs.filter((s) => this.selectedMagicSubIds.has(s.subId)).length;
+      const isProjChecked = this.selectedMagicProjectIds.has(p.folderId);
+      const isIndeterminate = !isProjChecked && checkedSubCount > 0;
+      if (isIndeterminate) indeterminateIds.push(p.folderId);
+
+      const subListHtml = isExpanded ? `
+        <div class="mt-2 pl-6 space-y-1 border-l-2 border-amber-300">
+          ${visibleSubs.map((s) => {
+            const subChecked = isProjChecked || this.selectedMagicSubIds.has(s.subId);
+            return `
+              <label class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-amber-50 cursor-pointer text-xs">
+                <span class="flex items-center gap-2 min-w-0">
+                  <input type="checkbox" ${subChecked ? 'checked' : ''} onchange="AdminManager.toggleMagicSubFolder('${p.folderId}', '${s.subId}', this.checked)" class="w-3.5 h-3.5 accent-amber-500 shrink-0">
+                  <span class="truncate text-slate-700">📂 ${s.subName}</span>
+                </span>
+                <span class="text-[11px] text-slate-400 shrink-0">${s.count || 0} foto</span>
+              </label>
+            `;
+          }).join('') || '<div class="text-xs text-slate-400 py-1">Belum ada folder keterangan.</div>'}
+        </div>
+      ` : '';
+
+      return `
+        <div class="p-2.5 rounded-xl border ${isProjChecked || checkedSubCount > 0 ? 'border-amber-400 bg-amber-50/30' : 'border-slate-200 bg-white'}">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <button type="button" onclick="AdminManager.toggleMagicProjectExpand('${p.folderId}')" class="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 shrink-0">${isExpanded ? '▾' : '▸'}</button>
+              <label class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer">
+                <input id="magic-proj-cb-${p.folderId}" type="checkbox" ${isProjChecked ? 'checked' : ''} onchange="AdminManager.toggleMagicProject('${p.folderId}', this.checked)" class="w-4 h-4 accent-amber-500 shrink-0">
+                <span class="text-sm font-semibold text-slate-800 truncate">${p.projectName}</span>
+              </label>
+            </div>
+            <button type="button" onclick="AdminManager.toggleMagicProjectExpand('${p.folderId}')" class="text-[11px] font-semibold text-slate-500 hover:text-amber-700 shrink-0">
+              ${checkedSubCount > 0 && !isProjChecked ? `${checkedSubCount}/${subs.length} folder` : `${subs.length} folder`}
+            </button>
+          </div>
+          ${subListHtml}
+        </div>
+      `;
+    }).join('') || '<div class="text-xs text-slate-400 text-center py-4">Tidak ada proyek atau keterangan yang cocok.</div>';
+
+    indeterminateIds.forEach((pid) => {
+      const el = document.getElementById(`magic-proj-cb-${pid}`);
+      if (el) el.indeterminate = true;
+    });
+
+    if (summaryEl) {
+      const payloadIds = this.getSelectedMagicIdsPayload();
+      const projCount = this.selectedMagicProjectIds.size;
+      const partialSubCount = payloadIds.length - projCount;
+      if (payloadIds.length === 0) {
+        summaryEl.textContent = 'Belum ada dipilih';
+      } else {
+        const parts = [];
+        if (projCount > 0) parts.push(`${projCount} proyek penuh`);
+        if (partialSubCount > 0) parts.push(`${partialSubCount} keterangan`);
+        summaryEl.textContent = `Terpilih: ${parts.join(' + ')}`;
+      }
+    }
   },
 
   setQuickExpiryDays(days) {
@@ -69,7 +199,7 @@ const AdminManager = {
 
   async createMagicLink() {
     const label = document.getElementById('magic-label-input').value.trim();
-    const checked = Array.from(document.querySelectorAll('.magic-proj-cb:checked')).map((el) => el.value);
+    const checked = this.getSelectedMagicIdsPayload();
     const filter = document.getElementById('magic-photo-filter').value;
     const dateVal = document.getElementById('magic-expiry-date').value;
 
@@ -358,5 +488,22 @@ const AdminManager = {
     if (res.status === 'success') {
       await App.loadStorageStatus();
     }
+  },
+
+  async deleteFolder(folderId, folderName, isProject) {
+    const label = isProject ? 'proyek' : 'folder keterangan';
+    if (!confirm(`Yakin hapus ${label} "${folderName}" beserta seluruh isinya?\n\nFolder akan dipindahkan ke Sampah Google Drive (bisa dipulihkan selama 30 hari).`)) {
+      return false;
+    }
+    const res = await callGasApi('ADMIN_FILE_OPS', {
+      operation: 'DELETE_FOLDER',
+      targetFolderId: folderId
+    });
+    if (res.status === 'success') {
+      alert(res.message || `Folder "${folderName}" berhasil dihapus.`);
+      return true;
+    }
+    alert(res.message || 'Gagal menghapus folder.');
+    return false;
   }
 };
