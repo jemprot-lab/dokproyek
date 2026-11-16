@@ -71,6 +71,7 @@ class UploadForegroundService : Service() {
             var successCount = 0
             var skippedCount = 0
             var failedCount = 0
+            var lastServerError: String? = null
             val total = uriStrings.size
 
             for (i in uriStrings.indices) {
@@ -115,6 +116,10 @@ class UploadForegroundService : Service() {
                         } else if (status == "skipped_duplicate") {
                             skippedCount++
                             uploaded = true
+                        } else if (status == "error") {
+                            lastServerError = res.optString("message").takeIf { it.isNotBlank() }
+                                ?: "Server menolak upload ($code)."
+                            break
                         } else {
                             attempt++
                             delay(2000L * attempt)
@@ -130,6 +135,8 @@ class UploadForegroundService : Service() {
             val finalMsg = if (failedCount == 0) {
                 "✅ Beres! $successCount foto masuk kantor" +
                     if (skippedCount > 0) " ($skippedCount foto sudah pernah dikirim)" else ""
+            } else if (!lastServerError.isNullOrBlank()) {
+                "⚠️ Gagal ($failedCount foto): $lastServerError"
             } else {
                 "⚠️ Sinyal lemah. $failedCount foto masih menunggu sinyal."
             }

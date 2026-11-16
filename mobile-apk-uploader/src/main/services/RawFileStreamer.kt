@@ -63,17 +63,20 @@ object RawFileStreamer {
         subFolderName: String,
         uri: Uri
     ): JSONObject {
-        val originalUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.setRequireOriginal(uri)
-        } else {
-            uri
-        }
-
         val (fileName, fileSize) = getFileNameAndSize(context, uri)
         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
         val exif = ExifBadge.inspect(context, uri)
 
-        val rawBytes = context.contentResolver.openInputStream(originalUri)?.use { it.readBytes() }
+        val rawBytes = try {
+            val originalUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.setRequireOriginal(uri)
+            } else {
+                uri
+            }
+            context.contentResolver.openInputStream(originalUri)?.use { it.readBytes() }
+        } catch (_: Exception) {
+            null
+        } ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IllegalStateException("Gagal membaca file foto asli.")
         val base64Data = Base64.encodeToString(rawBytes, Base64.NO_WRAP)
 
