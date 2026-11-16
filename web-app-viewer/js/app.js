@@ -136,6 +136,7 @@ const App = {
     document.getElementById('workspace-view').classList.remove('hidden');
     this.initIdleAutoLogout();
     this.startAutoRefresh();
+    this.initBackNavigation();
 
     const isAdmin = SessionState.isAdmin();
     document.querySelectorAll('.admin-only').forEach((el) => {
@@ -149,6 +150,56 @@ const App = {
     } else if (SessionState.user) {
       userLabel.textContent = `${SessionState.user.username} (${SessionState.user.role})`;
       this.loadStorageStatus();
+    }
+  },
+
+  initBackNavigation() {
+    if (this._backNavInitialized) return;
+    this._backNavInitialized = true;
+
+    window.addEventListener('popstate', () => {
+      const lightbox = document.getElementById('lightbox-modal');
+      if (lightbox && !lightbox.classList.contains('hidden')) {
+        LightboxWorkstation.close(true);
+        return;
+      }
+
+      const magicModal = document.getElementById('magic-modal');
+      if (magicModal && !magicModal.classList.contains('hidden')) {
+        magicModal.classList.add('hidden');
+        return;
+      }
+
+      const usersModal = document.getElementById('users-modal');
+      if (usersModal && !usersModal.classList.contains('hidden')) {
+        usersModal.classList.add('hidden');
+        return;
+      }
+
+      const warnModal = document.getElementById('storage-warning-modal');
+      if (warnModal && !warnModal.classList.contains('hidden')) {
+        warnModal.classList.add('hidden');
+        return;
+      }
+
+      if (this.currentSubFolder) {
+        this.currentSubFolder = null;
+        this.photos = [];
+        this.selectedIds.clear();
+        this.updateSelectionBar();
+        this.renderSidebarProjects();
+        this.renderSubFolderCards();
+      }
+    });
+  },
+
+  pushHistoryState(viewName) {
+    try {
+      if (window.history.state?.view !== viewName) {
+        window.history.pushState({ view: viewName }, '');
+      }
+    } catch {
+      // Abaikan jika browser membatasi history API
     }
   },
 
@@ -695,6 +746,9 @@ const App = {
   async selectSubFolder(subId) {
     if (!this.currentProject) return;
     this.currentSubFolder = this.currentProject.subFolders.find((s) => s.subId === subId) || null;
+    if (this.currentSubFolder) {
+      this.pushHistoryState('photos');
+    }
     this.selectedIds.clear();
     this.updateSelectionBar();
     this.renderSidebarProjects();

@@ -163,12 +163,19 @@ const LightboxWorkstation = {
   open(photosList, index) {
     this.photos = photosList;
     this.currentIndex = index;
+    if (window.App && typeof window.App.pushHistoryState === 'function') {
+      window.App.pushHistoryState('lightbox');
+    }
     document.getElementById('lightbox-modal').classList.remove('hidden');
     this.renderCurrent();
   },
 
-  close() {
-    document.getElementById('lightbox-modal').classList.add('hidden');
+  close(fromPopState = false) {
+    const modal = document.getElementById('lightbox-modal');
+    if (modal) modal.classList.add('hidden');
+    if (!fromPopState && window.history.state?.view === 'lightbox') {
+      window.history.back();
+    }
   },
 
   next() {
