@@ -543,7 +543,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
    * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
 
-### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v17`)
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v18`)
 1. **Navigasi & Pencarian Instan:**
    * Pencarian proyek/keterangan (termasuk nama pengirim/uploader untuk Admin) berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
    * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin serta badge pengirim **`👤 username`** khusus Admin per folder keterangan (bersumber dari metadata Drive + fallback `Audit_Logs`, tersembunyi dari tamu Magic Link).
@@ -563,7 +563,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Footer vendor **JeMPRoT Digital Solution • DokProyek** terpasang di layar login (dengan efek neon cyan) dan bagian bawah workspace (`no-print`).
    * **Auto-Refresh Aman Tanpa Berkedip (`startAutoRefresh` + `CHECK_UPDATES`):** Mengecek `CacheService` RAM server GAS setiap 35 detik (berhenti otomatis saat tab di-minimize atau idle > 5 menit); hanya mengambil data & menyisipkan foto baru ke DOM jika ada upload/perubahan baru tanpa me-reload foto lama, dilengkapi toast `📸 X foto baru masuk`.
 
-### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.1.0` / `versionCode 11`)
+### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.1.1` / `versionCode 12`)
 1. **UI Modern, Tidak Kaku, & Safe Area (`MainActivity.kt`):**
    * Top App Bar `#0F172A` dengan badge akun mandor, kartu form putih bersudut membulat + label jelas, input lembut (`#F8FAFC`), kartu preview foto dengan thumbnail membulat + tombol hapus `[✕]`, *sticky bottom thumb-zone* berbayangan untuk tombol **🚀 KIRIM X FOTO**, dan `WindowInsetsCompat.Type.systemBars()`.
 2. **UX Lapangan & Kalender Indonesia:**
@@ -571,7 +571,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Kalender tanggal (`DatePickerDialog`) berbahasa Indonesia (`Locale("id", "ID")`), dan setelah upload selesai (klik **OK**), form + tanggal otomatis reset ke tanggal hari ini waktu Indonesia (`Asia/Jakarta` / WIB).
    * Saat upload berjalan, tampil **spinner lingkaran amber besar** di samping status proses + **persentase progress `%` real-time (`0% → 100%`)** pada garis progress & notifikasi Android; tekan Back saat upload memindahkan app ke latar belakang dengan aman, notifikasi **✅ Upload Selesai** tetap muncul di panel notifikasi saat sukses, dan state hasil upload tetap pulih saat APK dibuka ulang.
 3. **Performa & Keandalan:** Autocomplete proyek memuat data sekali jalan lewat `LIST_PROJECT_NAMES` (dengan fallback otomatis ke `SEARCH_PROJECTS`), tampilan dropdown ringkas maksimal **5 baris terlihat** dan bisa di-scroll naik-turun, `RawFileStreamer.httpClient` terpusat, pembacaan foto asli `MediaStore.setRequireOriginal` dilengkapi fallback aman, error server GAS langsung ditampilkan tanpa retry buang waktu, izin `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` ramah untuk HP Xiaomi/Oppo/Vivo, layar Login bersih tanpa menu ubah URL server, dan **Kunci 1 Akun = 1 HP** untuk role `UPLOADER` (via `deviceId` pada `Auth_Token` dengan tombol **🔓 Buka HP** di Web App Admin).
-4. **Rilis Lokal:** Hasil build signed APK terbaru selalu di-download dan dinamai sesuai versi di `apk-release/` (terbaru: `apk-release/dokproyek-uploader-v1.1.0.apk`).
+4. **Rilis Lokal:** Hasil build signed APK terbaru selalu di-download dan dinamai sesuai versi di `apk-release/` (terbaru: `apk-release/dokproyek-uploader-v1.1.1.apk`).
 
 ### E. Catatan Deploy & Backlog
 * **Deploy Manual GAS:** Setiap perubahan pada `backend-gas/` wajib disalin ke editor Google Apps Script lalu di-deploy sebagai **New version** (*Deploy > Manage deployments > Edit > Version: New version > Deploy*), termasuk menjalankan `initVendorMaster()` 1x untuk mengaktifkan trigger harian.

@@ -595,16 +595,23 @@ const App = {
       }[ch]));
 
     grid.innerHTML = subs.map((s) => {
+      const m = String(s.subName || '').trim().match(/^(\d{2}-\d{2}-\d{4})(?:\s+(.+))?$/);
+      const datePart = m ? m[1] : '';
+      const notePart = m ? (m[2] || '').trim() : String(s.subName || '').trim();
+      const titleText = notePart || datePart || s.subName;
+      const metaLeft = datePart
+        ? `📅 ${esc(datePart)} • 📷 ${s.count} foto`
+        : `📷 ${s.count} foto`;
       const uploaderBadge =
         isAdmin && s.uploaders && s.uploaders.length
           ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">👤 ${esc(s.uploaders.join(', '))}</span>`
           : '';
       return `
       <div onclick="App.selectSubFolder('${s.subId}')" class="bg-white rounded-xl border border-slate-200 hover:border-amber-500 hover:shadow-md p-4 cursor-pointer transition flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="font-bold text-slate-900 truncate">📂 ${esc(s.subName)}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-bold text-slate-900 leading-snug break-words line-clamp-2" title="${esc(s.subName)}">📂 ${esc(titleText)}</div>
           <div class="flex flex-wrap items-center gap-2 mt-1.5">
-            <span class="text-xs text-slate-500">📷 ${s.count} foto</span>
+            <span class="text-[11px] text-slate-500 font-medium">${metaLeft}</span>
             ${uploaderBadge}
           </div>
         </div>

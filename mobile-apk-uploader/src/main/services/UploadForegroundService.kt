@@ -107,7 +107,7 @@ class UploadForegroundService : Service() {
                         ) { filePct ->
                             val overallPct = ((i * 100 + filePct) / total).coerceIn(1, 99)
                             val pctText = if (filePct >= 90) {
-                                "⏳ Foto ${i + 1}/$total ($overallPct%) • Menyimpan ke Drive..."
+                                "⏳ Foto ${i + 1}/$total ($overallPct%) • Menyimpan ke Cloud..."
                             } else {
                                 "⏳ Foto ${i + 1}/$total ($overallPct%) • Mengirim..."
                             }
