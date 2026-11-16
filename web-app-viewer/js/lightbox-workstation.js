@@ -70,6 +70,83 @@ const LightboxWorkstation = {
       this.isDragging = false;
     });
 
+    // Touch Pinch-to-Zoom (2 jari), Pan (1 jari saat zoom), Double-Tap Zoom, & Swipe (saat 100%)
+    stage.style.touchAction = 'none';
+    img.style.touchAction = 'none';
+    const getTouchDist = (touches) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    stage.addEventListener('touchstart', (e) => {
+      if (e.target && e.target.closest('button')) return;
+      if (e.touches.length === 2) {
+        this._pinchStartDist = getTouchDist(e.touches);
+        this._pinchStartScale = this.scale;
+        this.isDragging = false;
+        this._swipeStartX = null;
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        const now = Date.now();
+        if (now - (this._lastTapAt || 0) < 300) {
+          this._lastTapAt = 0;
+          this.setZoom(this.scale > 1 ? 1 : 2.5);
+          this.isDragging = false;
+          this._swipeStartX = null;
+          return;
+        }
+        this._lastTapAt = now;
+        if (this.scale > 1) {
+          this.isDragging = true;
+          this.startX = t.clientX - this.translateX;
+          this.startY = t.clientY - this.translateY;
+          this._swipeStartX = null;
+        } else {
+          this.isDragging = false;
+          this._swipeStartX = t.clientX;
+          this._swipeStartY = t.clientY;
+        }
+      }
+    }, { passive: true });
+
+    stage.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && this._pinchStartDist > 0) {
+        e.preventDefault();
+        const dist = getTouchDist(e.touches);
+        this.setZoom(this._pinchStartScale * (dist / this._pinchStartDist));
+      } else if (e.touches.length === 1 && this.isDragging) {
+        e.preventDefault();
+        const t = e.touches[0];
+        this.translateX = t.clientX - this.startX;
+        this.translateY = t.clientY - this.startY;
+        this.applyTransform();
+      }
+    }, { passive: false });
+
+    stage.addEventListener('touchend', (e) => {
+      if (e.touches.length === 1 && this.scale > 1) {
+        this._pinchStartDist = 0;
+        this.isDragging = true;
+        this.startX = e.touches[0].clientX - this.translateX;
+        this.startY = e.touches[0].clientY - this.translateY;
+        return;
+      }
+      if (e.touches.length === 0) {
+        if (this.scale === 1 && this._swipeStartX !== null && e.changedTouches.length === 1) {
+          const dx = e.changedTouches[0].clientX - this._swipeStartX;
+          const dy = e.changedTouches[0].clientY - (this._swipeStartY || 0);
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx < 0) this.next();
+            else this.prev();
+          }
+        }
+        this.isDragging = false;
+        this._pinchStartDist = 0;
+        this._swipeStartX = null;
+      }
+    }, { passive: true });
+
     // Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
       const modal = document.getElementById('lightbox-modal');
