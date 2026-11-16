@@ -607,18 +607,84 @@ const App = {
           ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">👤 ${esc(s.uploaders.join(', '))}</span>`
           : '';
       return `
-      <div onclick="App.selectSubFolder('${s.subId}')" class="bg-white rounded-xl border border-slate-200 hover:border-amber-500 hover:shadow-md p-4 cursor-pointer transition flex items-center justify-between gap-3">
+      <div onclick="App.hideFolderTooltip(); App.selectSubFolder('${s.subId}')"
+           onmouseenter="App.scheduleFolderTooltip(this)"
+           onmouseleave="App.hideFolderTooltip()"
+           data-tooltip-note="${esc(titleText)}"
+           data-tooltip-date="${esc(datePart)}"
+           class="bg-white rounded-xl border border-slate-200 hover:border-amber-500 hover:shadow-md p-4 cursor-pointer transition flex items-center justify-between gap-3">
         <div class="min-w-0 flex-1">
-          <div class="text-sm font-bold text-slate-900 leading-snug break-words line-clamp-2" title="${esc(s.subName)}">📂 ${esc(titleText)}</div>
+          <div class="text-sm font-bold text-slate-900 leading-snug break-words line-clamp-2">📂 ${esc(titleText)}</div>
           <div class="flex flex-wrap items-center gap-2 mt-1.5">
             <span class="text-[11px] text-slate-500 font-medium">${metaLeft}</span>
             ${uploaderBadge}
           </div>
         </div>
-        ${isAdmin ? `<button onclick="event.stopPropagation(); App.onDeleteSubFolder('${s.subId}', '${s.subName.replace(/'/g, "\\'")}')" title="Hapus folder keterangan" class="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold shrink-0">🗑️</button>` : ''}
+        ${isAdmin ? `<button onclick="event.stopPropagation(); App.hideFolderTooltip(); App.onDeleteSubFolder('${s.subId}', '${s.subName.replace(/'/g, "\\'")}')" title="Hapus folder keterangan" class="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold shrink-0">🗑️</button>` : ''}
       </div>
     `;
     }).join('');
+  },
+
+  scheduleFolderTooltip(el) {
+    this.hideFolderTooltip();
+    const note = el?.dataset?.tooltipNote || '';
+    const date = el?.dataset?.tooltipDate || '';
+    if (!note && !date) return;
+
+    this._folderTipTimer = setTimeout(() => {
+      let tip = document.getElementById('smart-folder-tooltip');
+      if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'smart-folder-tooltip';
+        tip.className =
+          'fixed z-50 pointer-events-none bg-slate-900/95 text-white border border-slate-700 shadow-2xl rounded-xl px-3.5 py-2.5 max-w-xs text-xs transition-opacity duration-150 opacity-0';
+        document.body.appendChild(tip);
+      }
+
+      const escTip = (str) =>
+        String(str || '').replace(/[&<>"']/g, (ch) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        }[ch]));
+
+      tip.innerHTML = `
+        <div class="font-bold text-white leading-snug break-words">📂 ${escTip(note)}</div>
+        ${date ? `<div class="text-[11px] text-amber-400 font-semibold mt-1">📅 ${escTip(date)}</div>` : ''}
+      `;
+      tip.classList.remove('hidden');
+      tip.style.opacity = '0';
+      tip.style.left = '0px';
+      tip.style.top = '0px';
+
+      const rect = el.getBoundingClientRect();
+      const tipRect = tip.getBoundingClientRect();
+      const margin = 12;
+
+      let left = rect.left + rect.width / 2 - tipRect.width / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - tipRect.width - margin));
+
+      let top = rect.top - tipRect.height - 8;
+      if (top < margin) {
+        top = Math.min(rect.bottom + 8, window.innerHeight - tipRect.height - margin);
+      }
+
+      tip.style.left = `${Math.round(left)}px`;
+      tip.style.top = `${Math.round(top)}px`;
+      tip.style.opacity = '1';
+    }, 500);
+  },
+
+  hideFolderTooltip() {
+    clearTimeout(this._folderTipTimer);
+    const tip = document.getElementById('smart-folder-tooltip');
+    if (tip) {
+      tip.style.opacity = '0';
+      tip.classList.add('hidden');
+    }
   },
 
   toggleMobileSidebar() {
