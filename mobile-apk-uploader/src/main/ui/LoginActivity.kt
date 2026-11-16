@@ -3,7 +3,9 @@ package com.kontraktor.dokproyek.uploader.ui
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.InputFilter
 import android.text.InputType
 import android.view.Gravity
@@ -116,10 +118,15 @@ class LoginActivity : AppCompatActivity() {
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
+                    val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: "android-${Build.MODEL}-${Build.ID}"
                     val payload = JSONObject().apply {
                         put("action", "LOGIN")
                         put("username", uname)
                         put("password", pin)
+                        put("deviceId", deviceId)
                     }
                     val req = Request.Builder()
                         .url(RawFileStreamer.getGasUrl(this@LoginActivity))

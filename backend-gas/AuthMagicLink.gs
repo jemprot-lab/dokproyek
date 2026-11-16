@@ -55,7 +55,26 @@ function handleLogin(payload) {
     }
 
     var token = String(user.Auth_Token || '').trim();
-    if (!token) {
+    var roleUpper = String(user.Role || '').toUpperCase();
+    var deviceId = String(payload.deviceId || '').trim();
+
+    if (roleUpper === 'UPLOADER' && deviceId) {
+      var sepIdx = token.indexOf('::');
+      if (sepIdx !== -1) {
+        var boundDevice = token.substring(sepIdx + 2);
+        if (boundDevice && boundDevice !== deviceId) {
+          return {
+            status: 'error',
+            code: 'DEVICE_LOCKED',
+            message: 'Akun ini sudah terkunci di HP lain. Hubungi Admin untuk buka kunci perangkat.'
+          };
+        }
+      } else {
+        token = (token || generateRandomToken('tok_')) + '::' + deviceId;
+        var userSheet = getSheetOrInit(CONFIG.SHEETS.USERS);
+        userSheet.getRange(user._rowIndex, 6).setValue(token);
+      }
+    } else if (!token) {
       token = generateRandomToken('tok_');
       var sheet = getSheetOrInit(CONFIG.SHEETS.USERS);
       sheet.getRange(user._rowIndex, 6).setValue(token);
@@ -130,6 +149,7 @@ function handleManageUsers(payload) {
           role: r.Role,
           allowedProjects: r.Allowed_Projects,
           hasActiveToken: Boolean(r.Auth_Token),
+          isDeviceLocked: String(r.Auth_Token || '').indexOf('::') !== -1,
           status: r.Status,
           createdAt: r.Created_At
         };
@@ -211,6 +231,12 @@ function handleManageUsers(payload) {
       sheet.getRange(target._rowIndex, 6).setValue('');
       appendAuditLog(auth.user.Username, 'AUTH_RESET', target.Username, (targetRole === 'UPLOADER' ? 'PIN' : 'Password') + ' direset & token lama dihapus');
       return { status: 'success', message: (targetRole === 'UPLOADER' ? 'PIN' : 'Password') + ' berhasil direset. Perangkat lama harus login ulang.' };
+    }
+
+    if (subAction === 'UNLOCK_DEVICE') {
+      sheet.getRange(target._rowIndex, 6).setValue('');
+      appendAuditLog(auth.user.Username, 'DEVICE_UNLOCK', target.Username, 'Kunci perangkat HP dibuka oleh Admin');
+      return { status: 'success', message: 'Kunci HP untuk ' + target.Username + ' sudah dibuka. Akun bisa login di HP baru.' };
     }
 
     if (subAction === 'DELETE_USER') {

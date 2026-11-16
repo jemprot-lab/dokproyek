@@ -337,6 +337,10 @@ const AdminManager = {
         : `<button onclick="AdminManager.activateUserAuth('${u.userId}')" class="px-2.5 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">✅ Aktifkan</button>`;
 
       const resetLabel = u.role === 'UPLOADER' ? '🔑 Reset PIN' : '🔑 Reset Password';
+      const unlockBtn =
+        u.role === 'UPLOADER' && u.isDeviceLocked
+          ? `<button onclick="AdminManager.unlockUserDevice('${u.userId}', '${u.username}')" class="px-2.5 py-1.5 text-xs font-semibold bg-sky-600 text-white rounded-lg hover:bg-sky-700">🔓 Buka HP</button>`
+          : '';
 
       return `
         <tr class="border-b border-slate-200">
@@ -345,6 +349,7 @@ const AdminManager = {
           <td class="p-3">${badge}</td>
           <td class="p-3 flex flex-wrap gap-1.5">
             ${toggleBtn}
+            ${unlockBtn}
             <button onclick="AdminManager.resetUserPin('${u.userId}', '${u.username}', '${u.role}')" class="px-2.5 py-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg hover:bg-amber-600">${resetLabel}</button>
             <button onclick="AdminManager.deleteUser('${u.userId}', '${u.username}')" class="px-2.5 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300">🗑️</button>
           </td>
@@ -417,6 +422,17 @@ const AdminManager = {
   async activateUserAuth(userId) {
     await callGasApi('MANAGE_USERS', { subAction: 'ACTIVATE_AUTH', targetUserId: userId });
     UiFeedback.toast('Akun diaktifkan kembali.', 'success');
+    await this.loadUsers();
+  },
+
+  async unlockUserDevice(userId, username) {
+    if (!await UiFeedback.confirm(`Buka kunci perangkat HP untuk ${username}?\n\nSetelah dibuka, akun bisa login di HP baru (HP lama otomatis keluar).`, 'Buka Kunci HP')) return;
+    const res = await callGasApi('MANAGE_USERS', { subAction: 'UNLOCK_DEVICE', targetUserId: userId });
+    if (res.status === 'success') {
+      await UiFeedback.alert(res.message, 'Kunci HP Dibuka');
+    } else {
+      await UiFeedback.alert(res.message || 'Gagal membuka kunci HP.', 'Gagal');
+    }
     await this.loadUsers();
   },
 
