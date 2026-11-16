@@ -74,6 +74,8 @@ function routeAction(action, payload) {
       return handleAdminFileOps(payload);
     case 'GET_STORAGE_STATUS':
       return handleGetStorageStatus(payload);
+    case 'CHECK_UPDATES':
+      return handleCheckUpdates(payload);
     default:
       return { status: 'error', code: 'UNKNOWN_ACTION', message: 'Action tidak dikenali: ' + action };
   }

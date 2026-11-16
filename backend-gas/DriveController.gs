@@ -54,6 +54,36 @@ function resolveViewerOrUploaderAccess(payload) {
 }
 
 /**
+ * Memperbarui timestamp perubahan data di Cache RAM GAS (untuk auto-refresh ringan Web App).
+ */
+function bumpDataChangeTimestamp() {
+  try {
+    var ts = String(Date.now());
+    CacheService.getScriptCache().put('LAST_DATA_CHANGE_TS', ts, 21600);
+    return ts;
+  } catch (e) {
+    return String(Date.now());
+  }
+}
+
+/**
+ * Cek ringan apakah ada upload/perubahan baru tanpa menyentuh Drive atau Spreadsheet.
+ * Action: CHECK_UPDATES
+ */
+function handleCheckUpdates(payload) {
+  var access = resolveViewerOrUploaderAccess(payload);
+  if (!access.valid) return { status: 'error', code: access.code, message: access.message };
+
+  var cache = CacheService.getScriptCache();
+  var ts = cache.get('LAST_DATA_CHANGE_TS');
+  if (!ts) {
+    ts = String(Date.now());
+    cache.put('LAST_DATA_CHANGE_TS', ts, 21600);
+  }
+  return { status: 'success', lastChangeTs: ts };
+}
+
+/**
  * Pencarian Proyek (dipanggil APK Uploader & Web App/PWA).
  * Action: SEARCH_PROJECTS
  */
@@ -247,6 +277,7 @@ function handleUploadPhotoRaw(payload) {
     syncProjectCacheFromDrive(projectFolder);
     recordTenantUploadBytes(savedFile.getSize());
     appendAuditLog(access.actor, 'UPLOAD', fileName, 'Tersimpan ke ' + projectName + ' > ' + subFolderName);
+    bumpDataChangeTimestamp();
 
     return {
       status: 'success',
@@ -380,7 +411,8 @@ function handleAdminFileOps(payload) {
   var fileIds = payload.fileIds || [];
 
   return withScriptLock(function () {
-    if (op === 'MOVE_FILES') {
+    var opResult = (function () {
+      if (op === 'MOVE_FILES') {
       var targetProject = DriveApp.getFolderById(payload.targetProjectId);
       var targetSub = findOrCreateSubFolder(targetProject, String(payload.targetSubFolderName).trim());
       var movedNames = [];
@@ -520,6 +552,7 @@ function handleAdminFileOps(payload) {
       }
 
       appendAuditLog(auth.user.Username, 'EMPTY_TRASH', purgedCount + ' item', 'Sampah dikosongkan permanen');
+      bumpDataChangeTimestamp();
       return { status: 'success', purgedCount: purgedCount, message: purgedCount + ' item di Trash berhasil dihapus permanen.' };
     }
 
@@ -558,6 +591,11 @@ function handleAdminFileOps(payload) {
     }
 
     return { status: 'error', message: 'Operasi admin tidak dikenali: ' + op };
+    })();
+    if (opResult && opResult.status === 'success') {
+      bumpDataChangeTimestamp();
+    }
+    return opResult;
   });
 }
 

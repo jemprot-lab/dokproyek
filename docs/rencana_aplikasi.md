@@ -543,7 +543,7 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
    * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
 
-### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v14`)
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v16`)
 1. **Navigasi & Pencarian Instan:**
    * Pencarian proyek/keterangan (termasuk nama pengirim/uploader untuk Admin) berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
    * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin serta badge pengirim **`👤 username`** khusus Admin per folder keterangan (bersumber dari metadata Drive + fallback `Audit_Logs`, tersembunyi dari tamu Magic Link).
@@ -560,7 +560,8 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Tombol **Install Aplikasi** (`#btn-install-pwa`) otomatis tersembunyi jika sudah berjalan sebagai PWA terpasang (`standalone`) atau setelah `appinstalled`.
    * Fitur **Auto Logout 15 menit** (`initIdleAutoLogout`) jika akun login tidak aktif selama 15 menit (termasuk saat tab/PWA lama di-minimize).
    * Halaman login Web App & PWA memakai **Username & Password** (bebas alfanumerik, tanpa `inputmode="numeric"`) lengkap dengan tombol **ikon mata** (`toggleLoginPassword`) untuk intip/sembunyikan password; manajemen akun di `#users-modal` otomatis membedakan **PIN 6 digit** (`UPLOADER` APK) dan **Password min. 6 karakter** (`ADMIN` / `VIEWER` Web).
-   * Footer vendor **JeMPRoT Digital Solution • DokProyek** terpasang di layar login dan bagian bawah workspace (`no-print`).
+   * Footer vendor **JeMPRoT Digital Solution • DokProyek** terpasang di layar login (dengan efek neon cyan) dan bagian bawah workspace (`no-print`).
+   * **Auto-Refresh Aman Tanpa Berkedip (`startAutoRefresh` + `CHECK_UPDATES`):** Mengecek `CacheService` RAM server GAS setiap 35 detik (berhenti otomatis saat tab di-minimize atau idle > 5 menit); hanya mengambil data & menyisipkan foto baru ke DOM jika ada upload/perubahan baru tanpa me-reload foto lama, dilengkapi toast `📸 X foto baru masuk`.
 
 ### D. Android APK Uploader (`mobile-apk-uploader/`, Versi `1.0.6` / `versionCode 7`)
 1. **UI Modern, Tidak Kaku, & Safe Area (`MainActivity.kt`):**

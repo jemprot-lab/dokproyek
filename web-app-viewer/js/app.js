@@ -135,6 +135,7 @@ const App = {
     document.getElementById('login-view').classList.add('hidden');
     document.getElementById('workspace-view').classList.remove('hidden');
     this.initIdleAutoLogout();
+    this.startAutoRefresh();
 
     const isAdmin = SessionState.isAdmin();
     document.querySelectorAll('.admin-only').forEach((el) => {
@@ -148,6 +149,131 @@ const App = {
     } else if (SessionState.user) {
       userLabel.textContent = `${SessionState.user.username} (${SessionState.user.role})`;
       this.loadStorageStatus();
+    }
+  },
+
+  startAutoRefresh() {
+    if (this._autoRefreshStarted) return;
+    this._autoRefreshStarted = true;
+    this._lastChangeTs = null;
+    this._isSilentSyncing = false;
+    this._lastSyncActivityAt = Date.now();
+
+    const markActive = () => {
+      this._lastSyncActivityAt = Date.now();
+    };
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach((evt) => {
+      window.addEventListener(evt, markActive, { passive: true });
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this._lastSyncActivityAt = Date.now();
+        this.checkForUpdatesSilent();
+      }
+    });
+
+    this._autoRefreshTimer = setInterval(() => {
+      if (document.hidden) return;
+      if (Date.now() - this._lastSyncActivityAt > 5 * 60 * 1000) return;
+      this.checkForUpdatesSilent();
+    }, 35000);
+  },
+
+  async checkForUpdatesSilent() {
+    if (this._isSilentSyncing) return;
+    this._isSilentSyncing = true;
+    try {
+      const res = await callGasApi('CHECK_UPDATES', { _silent: true });
+      if (!res || res.status !== 'success' || !res.lastChangeTs) return;
+      if (this._lastChangeTs === null) {
+        this._lastChangeTs = res.lastChangeTs;
+        return;
+      }
+      if (res.lastChangeTs !== this._lastChangeTs) {
+        this._lastChangeTs = res.lastChangeTs;
+        await this.silentRefreshProjectsAndPhotos();
+      }
+    } catch {
+      // Abaikan gangguan jaringan sementara saat background sync
+    } finally {
+      this._isSilentSyncing = false;
+    }
+  },
+
+  async silentRefreshProjectsAndPhotos() {
+    const includeArchived = Boolean(document.getElementById('chk-show-archived')?.checked);
+    const projRes = await callGasApi('SEARCH_PROJECTS', {
+      query: '',
+      includeArchived,
+      _silent: true
+    });
+    if (projRes && projRes.status === 'success') {
+      const nextAll = projRes.projects || [];
+      const prevSig = JSON.stringify(this.allProjects);
+      const nextSig = JSON.stringify(nextAll);
+      if (prevSig !== nextSig) {
+        this.allProjects = nextAll;
+        const activeProjId = this.currentProject?.folderId || null;
+        const activeSubId = this.currentSubFolder?.subId || null;
+        this.filterProjectsLocally();
+        if (activeProjId) {
+          this.currentProject = this.allProjects.find((p) => p.folderId === activeProjId) || null;
+          if (this.currentProject && activeSubId) {
+            this.currentSubFolder =
+              (this.currentProject.subFolders || []).find((s) => s.subId === activeSubId) || null;
+          } else {
+            this.currentSubFolder = null;
+          }
+          this.renderSidebarProjects();
+          if (!this.currentSubFolder) {
+            this.renderSubFolderCards();
+          }
+        }
+      }
+    }
+
+    if (!this.currentSubFolder) return;
+    const photoRes = await callGasApi('LIST_PHOTOS', {
+      subFolderId: this.currentSubFolder.subId,
+      onlyStarred: this.onlyStarred,
+      _silent: true
+    });
+    if (!photoRes || photoRes.status !== 'success') return;
+
+    const nextPhotos = photoRes.photos || [];
+    const prevIds = this.photos.map((p) => p.id);
+    const nextIds = nextPhotos.map((p) => p.id);
+    const prevSet = new Set(prevIds);
+    const addedPhotos = nextPhotos.filter((p) => !prevSet.has(p.id));
+
+    const prevSig = JSON.stringify(this.photos.map((p) => [p.id, p.starred, p.caption]));
+    const nextSig = JSON.stringify(nextPhotos.map((p) => [p.id, p.starred, p.caption]));
+    if (prevSig === nextSig) return;
+
+    const grid = document.getElementById('photo-grid');
+    const isAppendOnly =
+      addedPhotos.length > 0 &&
+      prevIds.length > 0 &&
+      prevIds.every((id) => nextIds.includes(id)) &&
+      nextPhotos.length === prevIds.length + addedPhotos.length;
+
+    this.photos = nextPhotos;
+    if (isAppendOnly && grid) {
+      const isAdmin = SessionState.isAdmin();
+      const addedHtml = addedPhotos
+        .map((p) => {
+          const idx = nextPhotos.findIndex((np) => np.id === p.id);
+          return this.buildPhotoCardHtml(p, idx, isAdmin);
+        })
+        .join('');
+      grid.insertAdjacentHTML('beforeend', addedHtml);
+    } else {
+      this.renderPhotoGrid();
+    }
+
+    if (addedPhotos.length > 0 && typeof UiFeedback !== 'undefined') {
+      UiFeedback.toast(`📸 ${addedPhotos.length} foto baru masuk`, 'info');
     }
   },
 
@@ -536,6 +662,39 @@ const App = {
     this.loadPhotos();
   },
 
+  buildPhotoCardHtml(p, idx, isAdmin) {
+    const checked = this.selectedIds.has(p.id);
+    const gpsBadge = p.gps
+      ? '<span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-500 text-white">📍 GPS</span>'
+      : '<span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-orange-500 text-white">⚠️ No GPS</span>';
+
+    return `
+      <div data-photo-id="${p.id}" class="bg-white rounded-xl border ${checked ? 'border-amber-500 ring-2 ring-amber-400' : 'border-slate-200'} overflow-hidden shadow-sm flex flex-col">
+        <div class="relative aspect-[4/3] bg-slate-900 cursor-pointer" onclick="LightboxWorkstation.open(App.photos, ${idx})">
+          <img src="${p.thumbnailUrl || p.previewUrl}" onerror="App.fallbackThumbnail(this, '${p.id}')" loading="lazy" alt="${p.name}" class="w-full h-full object-cover">
+          <div class="absolute top-2 left-2 flex gap-1" onclick="event.stopPropagation()">
+            <input type="checkbox" ${checked ? 'checked' : ''} onchange="App.toggleSelect('${p.id}')" class="w-5 h-5 accent-amber-500 rounded cursor-pointer">
+          </div>
+          <div class="absolute top-2 right-2">${gpsBadge}</div>
+          ${p.starred ? '<div class="absolute bottom-2 right-2 text-lg drop-shadow">⭐</div>' : ''}
+        </div>
+        <div class="p-2.5 flex-1 flex flex-col justify-between gap-1.5">
+          <div>
+            <div class="text-xs font-bold text-slate-800 truncate">${p.name}</div>
+            <div class="text-[11px] font-mono-code text-slate-500">${p.takenTime || '-'}</div>
+            ${p.caption ? `<div class="text-xs text-slate-600 mt-1 line-clamp-2">📝 ${p.caption}</div>` : ''}
+          </div>
+          ${isAdmin ? `
+            <div class="flex gap-1 pt-1 border-t border-slate-100">
+              <button onclick="App.onToggleStar('${p.id}', ${p.starred})" class="flex-1 py-1 text-xs rounded bg-slate-100 hover:bg-amber-100">${p.starred ? '★ Bintang' : '☆ Bintang'}</button>
+              <button onclick="App.onEditCaption('${p.id}', '${(p.caption || '').replace(/'/g, "\\'")}')" class="flex-1 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">📝 Catatan</button>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  },
+
   renderPhotoGrid() {
     const grid = document.getElementById('photo-grid');
     if (!this.photos.length) {
@@ -544,38 +703,7 @@ const App = {
     }
 
     const isAdmin = SessionState.isAdmin();
-    grid.innerHTML = this.photos.map((p, idx) => {
-      const checked = this.selectedIds.has(p.id);
-      const gpsBadge = p.gps
-        ? '<span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-500 text-white">📍 GPS</span>'
-        : '<span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-orange-500 text-white">⚠️ No GPS</span>';
-
-      return `
-        <div class="bg-white rounded-xl border ${checked ? 'border-amber-500 ring-2 ring-amber-400' : 'border-slate-200'} overflow-hidden shadow-sm flex flex-col">
-          <div class="relative aspect-[4/3] bg-slate-900 cursor-pointer" onclick="LightboxWorkstation.open(App.photos, ${idx})">
-            <img src="${p.thumbnailUrl || p.previewUrl}" onerror="App.fallbackThumbnail(this, '${p.id}')" loading="lazy" alt="${p.name}" class="w-full h-full object-cover">
-            <div class="absolute top-2 left-2 flex gap-1" onclick="event.stopPropagation()">
-              <input type="checkbox" ${checked ? 'checked' : ''} onchange="App.toggleSelect('${p.id}')" class="w-5 h-5 accent-amber-500 rounded cursor-pointer">
-            </div>
-            <div class="absolute top-2 right-2">${gpsBadge}</div>
-            ${p.starred ? '<div class="absolute bottom-2 right-2 text-lg drop-shadow">⭐</div>' : ''}
-          </div>
-          <div class="p-2.5 flex-1 flex flex-col justify-between gap-1.5">
-            <div>
-              <div class="text-xs font-bold text-slate-800 truncate">${p.name}</div>
-              <div class="text-[11px] font-mono-code text-slate-500">${p.takenTime || '-'}</div>
-              ${p.caption ? `<div class="text-xs text-slate-600 mt-1 line-clamp-2">📝 ${p.caption}</div>` : ''}
-            </div>
-            ${isAdmin ? `
-              <div class="flex gap-1 pt-1 border-t border-slate-100">
-                <button onclick="App.onToggleStar('${p.id}', ${p.starred})" class="flex-1 py-1 text-xs rounded bg-slate-100 hover:bg-amber-100">${p.starred ? '★ Bintang' : '☆ Bintang'}</button>
-                <button onclick="App.onEditCaption('${p.id}', '${(p.caption || '').replace(/'/g, "\\'")}')" class="flex-1 py-1 text-xs rounded bg-slate-100 hover:bg-slate-200">📝 Catatan</button>
-              </div>
-            ` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
+    grid.innerHTML = this.photos.map((p, idx) => this.buildPhotoCardHtml(p, idx, isAdmin)).join('');
   },
 
   async fallbackThumbnail(imgEl, fileId) {
