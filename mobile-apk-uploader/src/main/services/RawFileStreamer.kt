@@ -10,7 +10,8 @@ import com.kontraktor.dokproyek.uploader.ui.components.ExifBadge
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
+import okio.BufferedSink
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -61,7 +62,8 @@ object RawFileStreamer {
         authToken: String,
         projectName: String,
         subFolderName: String,
-        uri: Uri
+        uri: Uri,
+        onProgress: ((Int) -> Unit)? = null
     ): JSONObject {
         val (fileName, fileSize) = getFileNameAndSize(context, uri)
         val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
@@ -99,11 +101,34 @@ object RawFileStreamer {
             put("base64Data", base64Data)
         }
 
-        val body = payload.toString().toRequestBody("text/plain;charset=utf-8".toMediaType())
+        val payloadBytes = payload.toString().toByteArray(Charsets.UTF_8)
+        val mediaType = "text/plain;charset=utf-8".toMediaType()
+        val body = object : RequestBody() {
+            override fun contentType() = mediaType
+            override fun contentLength() = payloadBytes.size.toLong()
+            override fun writeTo(sink: BufferedSink) {
+                val total = payloadBytes.size.toLong().coerceAtLeast(1L)
+                var offset = 0
+                val chunkSize = 8192
+                var lastPct = -1
+                while (offset < payloadBytes.size) {
+                    val count = minOf(chunkSize, payloadBytes.size - offset)
+                    sink.write(payloadBytes, offset, count)
+                    offset += count
+                    val pct = ((offset * 85L) / total).toInt().coerceIn(1, 85)
+                    if (pct != lastPct && (pct - lastPct >= 3 || pct == 85)) {
+                        lastPct = pct
+                        onProgress?.invoke(pct)
+                    }
+                }
+                onProgress?.invoke(90)
+            }
+        }
         val request = Request.Builder().url(getGasUrl(context)).post(body).build()
 
         httpClient.newCall(request).execute().use { response ->
             val respText = response.body?.string() ?: "{}"
+            onProgress?.invoke(100)
             return JSONObject(respText)
         }
     }

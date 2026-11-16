@@ -2,6 +2,7 @@ package com.kontraktor.dokproyek.uploader.services
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -13,6 +14,7 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.core.app.NotificationCompat
+import com.kontraktor.dokproyek.uploader.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +26,15 @@ class UploadForegroundService : Service() {
 
     companion object {
         const val CHANNEL_ID = "dokproyek_upload_channel"
+        const val CHANNEL_DONE_ID = "dokproyek_upload_done_channel"
         const val NOTIF_ID = 1001
+        const val NOTIF_DONE_ID = 1002
+        const val PREFS_UPLOAD_STATE = "dokproyek_upload_state"
+        const val KEY_IS_UPLOADING = "is_uploading"
+        const val KEY_STATUS_MSG = "status_msg"
+        const val KEY_PERCENT = "percent"
+        const val KEY_PENDING_DONE_MSG = "pending_done_msg"
+        const val KEY_PENDING_DONE_ERR = "pending_done_err"
         const val ACTION_PROGRESS = "com.kontraktor.dokproyek.UPLOAD_PROGRESS"
         const val ACTION_REVOKED = "com.kontraktor.dokproyek.TOKEN_REVOKED"
         const val ACTION_QUOTA_BLOCKED = "com.kontraktor.dokproyek.QUOTA_BLOCKED"
@@ -55,12 +65,14 @@ class UploadForegroundService : Service() {
             return START_NOT_STICKY
         }
 
-        val initialNotif = buildProgressNotif("Menyiapkan ${uriStrings.size} foto...", 0, uriStrings.size)
+        val initialNotif = buildProgressNotif("Menyiapkan ${uriStrings.size} foto...", 0, 100)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, initialNotif.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(NOTIF_ID, initialNotif.build())
         }
+
+        saveActiveState("Menyiapkan ${uriStrings.size} foto...", 0, isUploading = true)
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DokProyek::UploadWakeLock").apply {
@@ -76,9 +88,11 @@ class UploadForegroundService : Service() {
 
             for (i in uriStrings.indices) {
                 val uri = Uri.parse(uriStrings[i])
-                val humanText = "⏳ Mengirim foto ke-${i + 1} dari $total... (Layar boleh dikunci)"
-                updateNotification(humanText, i, total)
-                broadcastStatus(humanText, i, total, isDone = false, hasNetworkError = false)
+                val startPct = ((i * 100) / total).coerceIn(1, 99)
+                val humanText = "⏳ Foto ${i + 1}/$total ($startPct%) • Layar boleh dikunci"
+                updateNotification(humanText, startPct, 100)
+                saveActiveState(humanText, startPct, isUploading = true)
+                broadcastStatus(humanText, i, total, startPct, isDone = false, hasNetworkError = false)
 
                 var attempt = 0
                 var uploaded = false
@@ -90,11 +104,22 @@ class UploadForegroundService : Service() {
                             projectName,
                             subFolderName,
                             uri
-                        )
+                        ) { filePct ->
+                            val overallPct = ((i * 100 + filePct) / total).coerceIn(1, 99)
+                            val pctText = if (filePct >= 90) {
+                                "⏳ Foto ${i + 1}/$total ($overallPct%) • Menyimpan ke Drive..."
+                            } else {
+                                "⏳ Foto ${i + 1}/$total ($overallPct%) • Mengirim..."
+                            }
+                            updateNotification(pctText, overallPct, 100)
+                            saveActiveState(pctText, overallPct, isUploading = true)
+                            broadcastStatus(pctText, i, total, overallPct, isDone = false, hasNetworkError = false)
+                        }
                         val status = res.optString("status")
                         val code = res.optString("code")
 
                         if (code == "TOKEN_REVOKED" || code == "UNAUTHORIZED") {
+                            clearActiveState()
                             sendBroadcast(Intent(ACTION_REVOKED))
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf()
@@ -103,9 +128,10 @@ class UploadForegroundService : Service() {
 
                         if (code == "QUOTA_EXCEEDED" || code == "SUBSCRIPTION_SUSPENDED") {
                             val errMsg = res.optString("message", "🚫 Penyimpanan kantor sudah penuh. Hubungi Admin.")
+                            clearActiveState()
                             sendBroadcast(Intent(ACTION_QUOTA_BLOCKED).putExtra("message", errMsg))
-                            updateNotification(errMsg, total, total)
-                            stopForeground(STOP_FOREGROUND_DETACH)
+                            showResultNotification("⚠️ Upload Dihentikan", errMsg)
+                            stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf()
                             return@launch
                         }
@@ -133,7 +159,7 @@ class UploadForegroundService : Service() {
             }
 
             val finalMsg = if (failedCount == 0) {
-                "✅ Beres! $successCount foto masuk kantor" +
+                "✅ Beres! $successCount foto masuk ke $projectName" +
                     if (skippedCount > 0) " ($skippedCount foto sudah pernah dikirim)" else ""
             } else if (!lastServerError.isNullOrBlank()) {
                 "⚠️ Gagal ($failedCount foto): $lastServerError"
@@ -141,15 +167,15 @@ class UploadForegroundService : Service() {
                 "⚠️ Sinyal lemah. $failedCount foto masih menunggu sinyal."
             }
 
-            broadcastStatus(finalMsg, total, total, isDone = true, hasNetworkError = failedCount > 0)
+            saveDoneState(finalMsg, hasErr = failedCount > 0)
+            broadcastStatus(finalMsg, total, total, 100, isDone = true, hasNetworkError = failedCount > 0)
             vibrateShort()
-            if (failedCount == 0) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIF_ID)
-            } else {
-                updateNotification(finalMsg, total, total)
-                stopForeground(STOP_FOREGROUND_DETACH)
-            }
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIF_ID)
+            showResultNotification(
+                if (failedCount == 0) "✅ Upload Selesai" else "⚠️ Upload Belum Selesai",
+                finalMsg
+            )
             stopSelf()
         }
 
@@ -158,23 +184,53 @@ class UploadForegroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Pengiriman Foto Proyek",
-                NotificationManager.IMPORTANCE_LOW
-            )
             val mgr = getSystemService(NotificationManager::class.java)
-            mgr.createNotificationChannel(channel)
+            mgr.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Progres Upload Foto", NotificationManager.IMPORTANCE_LOW)
+            )
+            mgr.createNotificationChannel(
+                NotificationChannel(CHANNEL_DONE_ID, "Notifikasi Upload Selesai", NotificationManager.IMPORTANCE_DEFAULT)
+            )
         }
     }
 
     private fun buildProgressNotif(text: String, progress: Int, max: Int): NotificationCompat.Builder {
+        val openIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Kirim Foto Proyek")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setContentIntent(openIntent)
             .setOngoing(progress < max)
+            .setOnlyAlertOnce(true)
             .setProgress(max, progress, false)
+    }
+
+    private fun showResultNotification(title: String, msg: String) {
+        val openIntent = PendingIntent.getActivity(
+            this,
+            1,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notif = NotificationCompat.Builder(this, CHANNEL_DONE_ID)
+            .setContentTitle(title)
+            .setContentText(msg)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setContentIntent(openIntent)
+            .setAutoCancel(true)
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_DONE_ID, notif)
     }
 
     private fun updateNotification(text: String, progress: Int, max: Int) {
@@ -182,11 +238,33 @@ class UploadForegroundService : Service() {
         mgr.notify(NOTIF_ID, buildProgressNotif(text, progress, max).build())
     }
 
-    private fun broadcastStatus(msg: String, current: Int, total: Int, isDone: Boolean, hasNetworkError: Boolean) {
+    private fun saveActiveState(msg: String, percent: Int, isUploading: Boolean) {
+        getSharedPreferences(PREFS_UPLOAD_STATE, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_IS_UPLOADING, isUploading)
+            .putString(KEY_STATUS_MSG, msg)
+            .putInt(KEY_PERCENT, percent)
+            .remove(KEY_PENDING_DONE_MSG)
+            .apply()
+    }
+
+    private fun saveDoneState(msg: String, hasErr: Boolean) {
+        getSharedPreferences(PREFS_UPLOAD_STATE, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_IS_UPLOADING, false)
+            .putString(KEY_PENDING_DONE_MSG, msg)
+            .putBoolean(KEY_PENDING_DONE_ERR, hasErr)
+            .apply()
+    }
+
+    private fun clearActiveState() {
+        getSharedPreferences(PREFS_UPLOAD_STATE, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun broadcastStatus(msg: String, current: Int, total: Int, percent: Int, isDone: Boolean, hasNetworkError: Boolean) {
         val intent = Intent(ACTION_PROGRESS).apply {
             putExtra("message", msg)
             putExtra("current", current)
             putExtra("total", total)
+            putExtra("percent", percent)
             putExtra("isDone", isDone)
             putExtra("hasNetworkError", hasNetworkError)
         }

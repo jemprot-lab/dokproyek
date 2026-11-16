@@ -15,6 +15,7 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
@@ -31,6 +32,8 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -108,29 +111,10 @@ class MainActivity : AppCompatActivity() {
             when (intent?.action) {
                 UploadForegroundService.ACTION_PROGRESS -> {
                     val msg = intent.getStringExtra("message") ?: ""
-                    val current = intent.getIntExtra("current", 0)
-                    val total = intent.getIntExtra("total", 1).coerceAtLeast(1)
+                    val percent = intent.getIntExtra("percent", 0)
                     val isDone = intent.getBooleanExtra("isDone", false)
                     val hasErr = intent.getBooleanExtra("hasNetworkError", false)
-
-                    progressUpload.visibility = if (isDone) View.GONE else View.VISIBLE
-                    progressUpload.isIndeterminate = !isDone
-
-                    uploadStatusRow.visibility = View.VISIBLE
-                    spinnerUpload.visibility = if (isDone) View.GONE else View.VISIBLE
-                    tvUploadStatus.text = msg
-                    uploadStatusRow.background = roundedBg(
-                        if (hasErr) "#FEF3C7" else if (isDone) "#DCFCE7" else "#EFF6FF",
-                        12f
-                    )
-                    btnRetryBox.visibility = if (hasErr) View.VISIBLE else View.GONE
-
-                    if (isDone) {
-                        btnUpload.isEnabled = true
-                        if (!hasErr) {
-                            showCompletionDialogAndReset(msg)
-                        }
-                    }
+                    applyUploadUiState(msg, percent, isDone, hasErr)
                 }
                 UploadForegroundService.ACTION_QUOTA_BLOCKED -> {
                     val msg = intent.getStringExtra("message") ?: "🚫 Penyimpanan kantor sudah penuh."
@@ -171,9 +155,68 @@ class MainActivity : AppCompatActivity() {
         }
 
         buildSingleScreenUi()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val uploadPrefs = getSharedPreferences(UploadForegroundService.PREFS_UPLOAD_STATE, Context.MODE_PRIVATE)
+                if (uploadPrefs.getBoolean(UploadForegroundService.KEY_IS_UPLOADING, false)) {
+                    Toast.makeText(this@MainActivity, "⏳ Upload tetap berjalan di latar belakang", Toast.LENGTH_SHORT).show()
+                    moveTaskToBack(true)
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
         checkAndShowFriendlyPermissionIntro()
         loadActiveProjectsOnce()
         checkStorageQuotaStatus()
+    }
+
+    private fun applyUploadUiState(msg: String, percent: Int, isDone: Boolean, hasErr: Boolean) {
+        progressUpload.visibility = if (isDone) View.GONE else View.VISIBLE
+        if (!isDone) {
+            if (percent > 0) {
+                progressUpload.isIndeterminate = false
+                progressUpload.max = 100
+                progressUpload.progress = percent.coerceIn(0, 100)
+            } else {
+                progressUpload.isIndeterminate = true
+            }
+        }
+
+        uploadStatusRow.visibility = View.VISIBLE
+        spinnerUpload.visibility = if (isDone) View.GONE else View.VISIBLE
+        tvUploadStatus.text = msg
+        uploadStatusRow.background = roundedBg(
+            if (hasErr) "#FEF3C7" else if (isDone) "#DCFCE7" else "#EFF6FF",
+            12f
+        )
+        btnRetryBox.visibility = if (hasErr) View.VISIBLE else View.GONE
+
+        if (isDone) {
+            btnUpload.isEnabled = true
+            getSharedPreferences(UploadForegroundService.PREFS_UPLOAD_STATE, Context.MODE_PRIVATE)
+                .edit().remove(UploadForegroundService.KEY_PENDING_DONE_MSG).apply()
+            if (!hasErr) {
+                showCompletionDialogAndReset(msg)
+            }
+        }
+    }
+
+    private fun syncPendingUploadState() {
+        val prefs = getSharedPreferences(UploadForegroundService.PREFS_UPLOAD_STATE, Context.MODE_PRIVATE)
+        val pendingMsg = prefs.getString(UploadForegroundService.KEY_PENDING_DONE_MSG, null)
+        if (!pendingMsg.isNullOrBlank()) {
+            val hasErr = prefs.getBoolean(UploadForegroundService.KEY_PENDING_DONE_ERR, false)
+            applyUploadUiState(pendingMsg, 100, isDone = true, hasErr = hasErr)
+            return
+        }
+        if (prefs.getBoolean(UploadForegroundService.KEY_IS_UPLOADING, false)) {
+            val msg = prefs.getString(UploadForegroundService.KEY_STATUS_MSG, "⏳ Mengirim foto...") ?: "⏳ Mengirim foto..."
+            val pct = prefs.getInt(UploadForegroundService.KEY_PERCENT, 0)
+            btnUpload.isEnabled = false
+            applyUploadUiState(msg, pct, isDone = false, hasErr = false)
+        }
     }
 
     override fun onStart() {
@@ -188,6 +231,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             registerReceiver(uploadReceiver, filter)
         }
+        syncPendingUploadState()
     }
 
     override fun onStop() {
@@ -462,7 +506,9 @@ class MainActivity : AppCompatActivity() {
 
         progressUpload = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             visibility = View.GONE
-            isIndeterminate = true
+            isIndeterminate = false
+            max = 100
+            progressTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
             indeterminateTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8))
             lp.setMargins(0, 0, 0, dp(10))
@@ -792,15 +838,38 @@ class MainActivity : AppCompatActivity() {
         val missing = getRequiredPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isEmpty()) return
+        if (missing.isNotEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("Izin Buka Galeri & Notifikasi")
+                .setMessage("Supaya foto bisa diambil dari Galeri dan notifikasi selesai tampil saat layar dikunci, sebentar lagi tekan tombol IZINKAN ya.")
+                .setCancelable(false)
+                .setPositiveButton("Lanjut") { _, _ ->
+                    permissionLauncher.launch(missing.toTypedArray())
+                }.show()
+            return
+        }
 
-        AlertDialog.Builder(this)
-            .setTitle("Izin Buka Galeri")
-            .setMessage("Supaya foto bisa diambil dari Galeri dan dikirim otomatis, sebentar lagi tekan tombol IZINKAN ya.")
-            .setCancelable(false)
-            .setPositiveButton("Lanjut") { _, _ ->
-                permissionLauncher.launch(missing.toTypedArray())
-            }.show()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val prefs = getSharedPreferences(LoginActivity.PREFS_NAME, Context.MODE_PRIVATE)
+            val askedBattery = prefs.getBoolean("asked_battery_opt", false)
+            if (!pm.isIgnoringBatteryOptimizations(packageName) && !askedBattery) {
+                prefs.edit().putBoolean("asked_battery_opt", true).apply()
+                AlertDialog.Builder(this)
+                    .setTitle("🔋 Agar Upload Tetap Jalan Saat Layar Dikunci")
+                    .setMessage("HP ini memiliki penghemat baterai yang bisa menghentikan upload saat layar dikunci atau pindah ke WA.\n\nTekan IZINKAN agar pengiriman foto tetap jalan di latar belakang.")
+                    .setPositiveButton("Izinkan") { _, _ ->
+                        try {
+                            startActivity(
+                                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                                    .setData(Uri.parse("package:$packageName"))
+                            )
+                        } catch (_: Exception) {}
+                    }
+                    .setNegativeButton("Nanti", null)
+                    .show()
+            }
+        }
     }
 
     private fun showPermissionSettingsDialog() {
