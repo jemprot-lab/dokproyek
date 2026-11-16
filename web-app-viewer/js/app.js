@@ -349,7 +349,23 @@ const App = {
     bar.style.width = `${pct}%`;
     bar.className = 'h-full transition-all ' + (pct >= 90 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500');
 
-    const waLink = `https://wa.me/${s.vendorContactWa || ''}?text=${encodeURIComponent('Halo, saya mau upgrade kapasitas penyimpanan aplikasi proyek.')}`;
+    const waLink = `https://wa.me/${s.vendorContactWa || ''}?text=${encodeURIComponent('Halo, saya mau perpanjang masa aktif / upgrade kapasitas aplikasi proyek.')}`;
+    if (!s.allowed && s.code === 'SUBSCRIPTION_SUSPENDED') {
+      if (s.webSuspended) {
+        this.showWebSuspendedLock(s.message, s.vendorContactWa);
+        return;
+      }
+      const remDays = typeof s.graceDaysRemaining === 'number' ? s.graceDaysRemaining : 7;
+      const graceMsg = `⚠️ STATUS SUSPENDED (Jatuh tempo ${dueFormatted || s.billingDueDate}). Upload APK sudah dihentikan. Jika tidak diperpanjang dalam ${remDays} hari, Web App & PWA juga tidak bisa diakses!`;
+      banner.className = 'bg-red-600 text-white px-4 py-2.5 text-xs font-bold text-center flex flex-wrap items-center justify-center gap-3 no-print';
+      banner.innerHTML = `<span>${graceMsg}</span><a href="${waLink}" target="_blank" class="px-3 py-1 bg-white text-red-700 rounded-lg">📲 Perpanjang Sekarang</a>`;
+      banner.classList.remove('hidden');
+      if (!sessionStorage.getItem('dokproyek_warn_dismissed')) {
+        this.showStorageWarningModal(graceMsg, waLink);
+      }
+      return;
+    }
+
     if (!s.allowed || pct >= 100) {
       banner.className = 'bg-red-600 text-white px-4 py-2.5 text-xs font-bold text-center flex flex-wrap items-center justify-center gap-3 no-print';
       banner.innerHTML = `<span>${s.message || '🚫 Kapasitas penyimpanan penuh!'}</span><a href="${waLink}" target="_blank" class="px-3 py-1 bg-white text-red-700 rounded-lg">📲 Hubungi Penyedia / Upgrade</a>`;
@@ -399,6 +415,39 @@ const App = {
     sessionStorage.setItem('dokproyek_warn_dismissed', '1');
     const modal = document.getElementById('storage-warning-modal');
     if (modal) modal.classList.add('hidden');
+  },
+
+  showWebSuspendedLock(message, vendorWa) {
+    this.allProjects = [];
+    this.projects = [];
+    this.photos = [];
+    let overlay = document.getElementById('web-suspended-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'web-suspended-overlay';
+      overlay.className =
+        'fixed inset-0 z-[70] bg-slate-950/95 flex items-center justify-center p-4 no-print';
+      document.body.appendChild(overlay);
+    }
+    const waLink = `https://wa.me/${vendorWa || ''}?text=${encodeURIComponent('Halo, saya mau perpanjang masa aktif aplikasi DokProyek.')}`;
+    const safeMsg = String(message || 'Masa aktif aplikasi & Web Viewer telah berakhir. Hubungi penyedia aplikasi.')
+      .replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    overlay.innerHTML = `
+      <div class="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-red-300">
+        <div class="px-5 py-4 bg-red-600 text-white font-bold text-base flex items-center gap-2">
+          <span>🔒 Akses Web App & PWA Ditangguhkan</span>
+        </div>
+        <div class="p-5 space-y-3 text-sm text-slate-700">
+          <p class="leading-relaxed font-semibold text-red-700">${safeMsg}</p>
+          <p class="text-xs text-slate-500">Data foto proyek Anda tetap tersimpan aman. Silakan hubungi penyedia aplikasi untuk mengaktifkan kembali akses.</p>
+        </div>
+        <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button onclick="App.logout()" class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold">Keluar</button>
+          <a href="${waLink}" target="_blank" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">📲 Hubungi Penyedia</a>
+        </div>
+      </div>
+    `;
+    overlay.classList.remove('hidden');
   },
 
   async handleLoginSubmit(e) {

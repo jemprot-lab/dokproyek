@@ -84,12 +84,31 @@ function handleCheckUpdates(payload) {
 }
 
 /**
+ * Mengecek apakah Web App & PWA ikut tersuspend (lewat 7 hari dari jatuh tempo atau status SUSPENDED).
+ */
+function checkWebViewerSuspended() {
+  var billing = checkTenantQuotaAndBilling(0);
+  if (!billing.allowed && billing.code === 'SUBSCRIPTION_SUSPENDED' && billing.webSuspended) {
+    return {
+      status: 'error',
+      code: 'WEB_SUBSCRIPTION_SUSPENDED',
+      message: '🔒 Masa aktif aplikasi & Web Viewer telah berakhir lebih dari 7 hari (' + billing.billingDueDate + '). Hubungi penyedia aplikasi untuk perpanjangan.',
+      storage: billing
+    };
+  }
+  return null;
+}
+
+/**
  * Pencarian Proyek (dipanggil APK Uploader & Web App/PWA).
  * Action: SEARCH_PROJECTS
  */
 function handleSearchProjects(payload) {
   var access = resolveViewerOrUploaderAccess(payload);
   if (!access.valid) return { status: 'error', code: access.code, message: access.message };
+
+  var webSuspendedErr = checkWebViewerSuspended();
+  if (webSuspendedErr) return webSuspendedErr;
 
   var query = String(payload.query || '').trim().toLowerCase();
   var includeArchived = Boolean(payload.includeArchived) && access.role === 'ADMIN';
@@ -296,6 +315,9 @@ function handleUploadPhotoRaw(payload) {
 function handleListPhotos(payload) {
   var access = resolveViewerOrUploaderAccess(payload);
   if (!access.valid) return { status: 'error', code: access.code, message: access.message };
+
+  var webSuspendedErr = checkWebViewerSuspended();
+  if (webSuspendedErr) return webSuspendedErr;
 
   var subFolderId = String(payload.subFolderId || '').trim();
   if (!subFolderId) return { status: 'error', message: 'subFolderId wajib diisi.' };

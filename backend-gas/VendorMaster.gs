@@ -258,10 +258,19 @@ function checkTenantQuotaAndBilling(additionalBytes) {
   }
 
   var dueObj = parseDmyDate(t.Billing_Due_Date);
-  if (t.Subscription_Status === 'SUSPENDED' || (dueObj && new Date().getTime() > dueObj.getTime())) {
+  var nowMs = new Date().getTime();
+  var pastDueMs = dueObj ? (nowMs - dueObj.getTime()) : 0;
+  var gracePeriodMs = 7 * 24 * 60 * 60 * 1000;
+  var isWebSuspended = (t.Subscription_Status === 'SUSPENDED') || (dueObj && pastDueMs > gracePeriodMs);
+  var daysPastDue = (dueObj && pastDueMs > 0) ? Math.floor(pastDueMs / (24 * 60 * 60 * 1000)) : 0;
+
+  if (t.Subscription_Status === 'SUSPENDED' || (dueObj && pastDueMs > 0)) {
     return {
       allowed: false,
       code: 'SUBSCRIPTION_SUSPENDED',
+      webSuspended: Boolean(isWebSuspended),
+      daysPastDue: daysPastDue,
+      graceDaysRemaining: Math.max(0, 7 - daysPastDue),
       message: '🔒 Masa aktif Cloud Server telah berakhir (' + t.Billing_Due_Date + '). Hubungi penyedia aplikasi.',
       usedGb: t.Used_Storage_GB,
       limitGb: t.Quota_Limit_GB,

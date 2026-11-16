@@ -63,6 +63,12 @@ async function callGasApi(action, payload = {}) {
     });
 
     const data = await res.json();
+    if (data.status === 'error' && data.code === 'WEB_SUBSCRIPTION_SUSPENDED') {
+      if (window.App && typeof window.App.showWebSuspendedLock === 'function') {
+        window.App.showWebSuspendedLock(data.message, data.storage?.vendorContactWa);
+      }
+      return data;
+    }
     if (data.status === 'error' && (data.code === 'TOKEN_REVOKED' || data.code === 'UNAUTHORIZED')) {
       SessionState.clear();
       if (typeof UiFeedback !== 'undefined') {
