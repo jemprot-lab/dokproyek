@@ -415,3 +415,44 @@ function handleManageMagicLink(payload) {
     return { status: 'error', message: 'subAction tidak dikenali.' };
   });
 }
+
+/**
+ * Helper Khusus Vendor (Mas Bos):
+ * Jalankan langsung dari editor Google Apps Script milik customer yang lupa password.
+ * Ubah TARGET_USERNAME & NEW_PASSWORD lalu klik Run.
+ */
+function resetPasswordDariVendor() {
+  var TARGET_USERNAME = 'admin';           // <-- Ganti dengan username yang lupa password
+  var NEW_PASSWORD    = 'PasswordBaru123'; // <-- Ganti dengan password/PIN baru (min. 6 karakter)
+
+  var uname = String(TARGET_USERNAME || '').trim().toLowerCase();
+  var pass = String(NEW_PASSWORD || '').trim();
+  if (!uname || pass.length < 6) {
+    throw new Error('TARGET_USERNAME wajib diisi dan NEW_PASSWORD minimal 6 karakter.');
+  }
+
+  return withScriptLock(function () {
+    var sheet = getSheetOrInit(CONFIG.SHEETS.USERS);
+    var rows = readSheetRows(CONFIG.SHEETS.USERS);
+    var target = null;
+    var available = [];
+
+    for (var i = 0; i < rows.length; i++) {
+      available.push(rows[i].Username + ' (' + rows[i].Role + ')');
+      if (String(rows[i].Username || '').trim().toLowerCase() === uname) {
+        target = rows[i];
+      }
+    }
+
+    if (!target) {
+      throw new Error('Username "' + uname + '" tidak ditemukan di tenant ' + CONFIG.TENANT_ID + '. Akun tersedia: ' + available.join(', '));
+    }
+
+    sheet.getRange(target._rowIndex, 3).setValue(hashSecret(pass));
+    sheet.getRange(target._rowIndex, 6).setValue('');
+    sheet.getRange(target._rowIndex, 7).setValue('ACTIVE');
+    appendAuditLog('VENDOR', 'VENDOR_RESET', target.Username, 'Password/PIN direset oleh Vendor (' + CONFIG.TENANT_ID + ')');
+
+    Logger.log('SUKSES: Password/PIN untuk "' + target.Username + '" (' + CONFIG.TENANT_ID + ') sudah direset.');
+  });
+}
