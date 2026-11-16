@@ -515,14 +515,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun openDatePicker() {
         val idLocale = Locale("id", "ID")
-        val config = Configuration(resources.configuration).apply { setLocale(idLocale) }
-        val idContext = createConfigurationContext(config)
         val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
-        DatePickerDialog(idContext, { _, y, m, d ->
+        val currentText = etDate.text.toString().trim()
+        if (currentText.matches(Regex("""\d{2}-\d{2}-\d{4}"""))) {
+            try {
+                val sdf = SimpleDateFormat("dd-MM-yyyy", idLocale).apply {
+                    timeZone = TimeZone.getTimeZone("Asia/Jakarta")
+                }
+                sdf.parse(currentText)?.let { cal.time = it }
+            } catch (_: Exception) {}
+        }
+
+        val prevLocale = Locale.getDefault()
+        Locale.setDefault(idLocale)
+        val dialog = DatePickerDialog(this, { _, y, m, d ->
             val formatted = String.format(idLocale, "%02d-%02d-%04d", d, m + 1, y)
             etDate.setText(formatted)
             updatePathBanner()
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+        dialog.setOnDismissListener { Locale.setDefault(prevLocale) }
+        dialog.show()
     }
 
     private fun updatePathBanner() {
