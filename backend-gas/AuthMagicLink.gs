@@ -31,7 +31,7 @@ function handleLogin(payload) {
   var username = String(payload.username || '').trim().toLowerCase();
   var password = String(payload.password || '').trim();
   if (!username || !password) {
-    return { status: 'error', code: 'INVALID_INPUT', message: 'Username dan PIN wajib diisi.' };
+    return { status: 'error', code: 'INVALID_INPUT', message: 'Username dan Password/PIN wajib diisi.' };
   }
 
   return withScriptLock(function () {
@@ -47,7 +47,7 @@ function handleLogin(payload) {
     }
 
     if (!user || user.Password_Hash !== targetHash) {
-      return { status: 'error', code: 'INVALID_CREDENTIALS', message: 'Username atau PIN salah.' };
+      return { status: 'error', code: 'INVALID_CREDENTIALS', message: 'Username atau Password/PIN salah.' };
     }
 
     if (String(user.Status).toUpperCase() !== 'ACTIVE') {
@@ -144,7 +144,13 @@ function handleManageUsers(payload) {
       var allowed = String(payload.allowedProjects || 'ALL').trim();
 
       if (!uname || !pass) {
-        return { status: 'error', message: 'Username dan PIN wajib diisi.' };
+        return { status: 'error', message: 'Username dan Password/PIN wajib diisi.' };
+      }
+      if (role === 'UPLOADER' && !/^\d{6}$/.test(pass)) {
+        return { status: 'error', message: 'Akun UPLOADER (APK) wajib memakai PIN tepat 6 digit angka.' };
+      }
+      if (role !== 'UPLOADER' && pass.length < 6) {
+        return { status: 'error', message: 'Password akun Web App minimal 6 karakter.' };
       }
       for (var i = 0; i < rows.length; i++) {
         if (String(rows[i].Username).trim().toLowerCase() === uname) {
@@ -193,11 +199,18 @@ function handleManageUsers(payload) {
 
     if (subAction === 'RESET_PASSWORD') {
       var newPass = String(payload.password || '').trim();
-      if (!newPass) return { status: 'error', message: 'PIN baru wajib diisi.' };
+      var targetRole = String(target.Role || 'UPLOADER').toUpperCase();
+      if (!newPass) return { status: 'error', message: 'Password/PIN baru wajib diisi.' };
+      if (targetRole === 'UPLOADER' && !/^\d{6}$/.test(newPass)) {
+        return { status: 'error', message: 'Akun UPLOADER (APK) wajib memakai PIN tepat 6 digit angka.' };
+      }
+      if (targetRole !== 'UPLOADER' && newPass.length < 6) {
+        return { status: 'error', message: 'Password akun Web App minimal 6 karakter.' };
+      }
       sheet.getRange(target._rowIndex, 3).setValue(hashSecret(newPass));
       sheet.getRange(target._rowIndex, 6).setValue('');
-      appendAuditLog(auth.user.Username, 'AUTH_RESET', target.Username, 'PIN direset & token lama dihapus');
-      return { status: 'success', message: 'PIN berhasil direset. Perangkat lama harus login ulang.' };
+      appendAuditLog(auth.user.Username, 'AUTH_RESET', target.Username, (targetRole === 'UPLOADER' ? 'PIN' : 'Password') + ' direset & token lama dihapus');
+      return { status: 'success', message: (targetRole === 'UPLOADER' ? 'PIN' : 'Password') + ' berhasil direset. Perangkat lama harus login ulang.' };
     }
 
     if (subAction === 'DELETE_USER') {

@@ -120,6 +120,17 @@ const App = {
     document.getElementById('workspace-view').classList.add('hidden');
   },
 
+  toggleLoginPassword() {
+    const input = document.getElementById('login-pin');
+    const eyeOpen = document.getElementById('eye-open-icon');
+    const eyeClosed = document.getElementById('eye-closed-icon');
+    if (!input) return;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    if (eyeOpen) eyeOpen.classList.toggle('hidden', isPassword);
+    if (eyeClosed) eyeClosed.classList.toggle('hidden', !isPassword);
+  },
+
   showMainWorkspace() {
     document.getElementById('login-view').classList.add('hidden');
     document.getElementById('workspace-view').classList.remove('hidden');

@@ -336,6 +336,8 @@ const AdminManager = {
         ? `<button onclick="AdminManager.revokeUserAuth('${u.userId}', '${u.username}')" class="px-2.5 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700">🛑 Cabut Akses</button>`
         : `<button onclick="AdminManager.activateUserAuth('${u.userId}')" class="px-2.5 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">✅ Aktifkan</button>`;
 
+      const resetLabel = u.role === 'UPLOADER' ? '🔑 Reset PIN' : '🔑 Reset Password';
+
       return `
         <tr class="border-b border-slate-200">
           <td class="p-3 font-bold text-slate-900">${u.username}</td>
@@ -343,7 +345,7 @@ const AdminManager = {
           <td class="p-3">${badge}</td>
           <td class="p-3 flex flex-wrap gap-1.5">
             ${toggleBtn}
-            <button onclick="AdminManager.resetUserPin('${u.userId}', '${u.username}')" class="px-2.5 py-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg hover:bg-amber-600">🔑 Reset PIN</button>
+            <button onclick="AdminManager.resetUserPin('${u.userId}', '${u.username}', '${u.role}')" class="px-2.5 py-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg hover:bg-amber-600">${resetLabel}</button>
             <button onclick="AdminManager.deleteUser('${u.userId}', '${u.username}')" class="px-2.5 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300">🗑️</button>
           </td>
         </tr>
@@ -351,13 +353,39 @@ const AdminManager = {
     }).join('');
   },
 
+  onRoleSelectChange() {
+    const role = document.getElementById('new-user-role')?.value || 'UPLOADER';
+    const labelEl = document.getElementById('new-user-pin-label');
+    const inputEl = document.getElementById('new-user-pin');
+    if (!inputEl) return;
+    if (role === 'UPLOADER') {
+      if (labelEl) labelEl.textContent = 'PIN 6 Digit (APK)';
+      inputEl.maxLength = 6;
+      inputEl.setAttribute('inputmode', 'numeric');
+      inputEl.placeholder = '123456';
+    } else {
+      if (labelEl) labelEl.textContent = 'Password (Min. 6 Karakter)';
+      inputEl.maxLength = 64;
+      inputEl.setAttribute('inputmode', 'text');
+      inputEl.placeholder = 'Min. 6 karakter';
+    }
+  },
+
   async createUser() {
     const username = document.getElementById('new-user-username').value.trim();
     const password = document.getElementById('new-user-pin').value.trim();
     const role = document.getElementById('new-user-role').value;
 
-    if (!username || !/^\d{6}$/.test(password)) {
-      UiFeedback.toast('Username wajib diisi dan PIN harus tepat 6 digit angka.', 'warning');
+    if (!username) {
+      UiFeedback.toast('Username wajib diisi.', 'warning');
+      return;
+    }
+    if (role === 'UPLOADER' && !/^\d{6}$/.test(password)) {
+      UiFeedback.toast('Akun UPLOADER (APK) wajib memakai PIN tepat 6 digit angka.', 'warning');
+      return;
+    }
+    if (role !== 'UPLOADER' && password.length < 6) {
+      UiFeedback.toast('Password akun Web App minimal 6 karakter.', 'warning');
       return;
     }
 
@@ -392,15 +420,23 @@ const AdminManager = {
     await this.loadUsers();
   },
 
-  async resetUserPin(userId, username) {
-    const newPin = await UiFeedback.prompt(`Masukkan PIN 6 digit baru untuk ${username}:`, '', 'Reset PIN');
-    if (newPin === null) return;
-    if (!/^\d{6}$/.test(newPin.trim())) {
-      UiFeedback.toast('PIN harus tepat 6 digit angka.', 'warning');
+  async resetUserPin(userId, username, role) {
+    const isUploader = String(role || 'UPLOADER').toUpperCase() === 'UPLOADER';
+    const label = isUploader ? 'PIN 6 digit' : 'Password (min. 6 karakter)';
+    const title = isUploader ? 'Reset PIN' : 'Reset Password';
+    const newSecret = await UiFeedback.prompt(`Masukkan ${label} baru untuk ${username}:`, '', title);
+    if (newSecret === null) return;
+    const trimmed = newSecret.trim();
+    if (isUploader && !/^\d{6}$/.test(trimmed)) {
+      UiFeedback.toast('PIN akun UPLOADER harus tepat 6 digit angka.', 'warning');
       return;
     }
-    await callGasApi('MANAGE_USERS', { subAction: 'RESET_PASSWORD', targetUserId: userId, password: newPin.trim() });
-    await UiFeedback.alert('PIN berhasil direset. Perangkat lama otomatis keluar.', 'PIN Direset');
+    if (!isUploader && trimmed.length < 6) {
+      UiFeedback.toast('Password akun Web App minimal 6 karakter.', 'warning');
+      return;
+    }
+    await callGasApi('MANAGE_USERS', { subAction: 'RESET_PASSWORD', targetUserId: userId, password: trimmed });
+    await UiFeedback.alert(`${isUploader ? 'PIN' : 'Password'} berhasil direset. Perangkat lama otomatis keluar.`, title + ' Berhasil');
     await this.loadUsers();
   },
 
