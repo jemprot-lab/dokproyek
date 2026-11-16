@@ -155,22 +155,12 @@ class LoginActivity : AppCompatActivity() {
             }
         }
 
-        val btnConfigUrl = TextView(this).apply {
-            text = "⚙️ Ganti URL Server"
-            textSize = 13f
-            setTextColor(Color.parseColor("#64748B"))
-            gravity = Gravity.CENTER
-            setPadding(0, 28, 0, 0)
-            setOnClickListener { showServerUrlDialog() }
-        }
-
         card.addView(title)
         card.addView(subtitle)
         card.addView(etUsername)
         card.addView(etPin)
         card.addView(tvError)
         card.addView(btnLogin)
-        card.addView(btnConfigUrl)
         root.addView(card)
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -178,23 +168,6 @@ class LoginActivity : AppCompatActivity() {
             insets
         }
         setContentView(root)
-    }
-
-    private fun showServerUrlDialog() {
-        val input = EditText(this).apply {
-            setText(RawFileStreamer.getGasUrl(this@LoginActivity))
-            hint = "https://script.google.com/macros/s/.../exec"
-            textSize = 13f
-        }
-        AlertDialog.Builder(this)
-            .setTitle("URL Server Google Apps Script")
-            .setMessage("Ubah jika Admin mengganti deployment URL (/exec). Kosongkan untuk kembali ke bawaan.")
-            .setView(input)
-            .setPositiveButton("Simpan") { _, _ ->
-                RawFileStreamer.saveGasUrl(this, input.text.toString())
-            }
-            .setNegativeButton("Batal", null)
-            .show()
     }
 
     private fun goToMain() {
