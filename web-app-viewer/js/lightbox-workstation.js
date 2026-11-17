@@ -242,6 +242,8 @@ const LightboxWorkstation = {
       gpsEl.innerHTML = `<span class="text-orange-400">⚠️ Tanpa Koordinat GPS</span>`;
     }
 
+    this.renderExifPanel(photo);
+
     const dataUrl = await this.fetchPhotoDataUrl(photo, true);
     if (this.photos[this.currentIndex]?.id === photo.id) {
       img.src = dataUrl;
@@ -250,6 +252,71 @@ const LightboxWorkstation = {
       document.getElementById('lightbox-filename').textContent = photo.name;
       this.prefetchAdjacent();
     }
+  },
+
+  toggleExifPanel() {
+    const panel = document.getElementById('lightbox-exif-panel');
+    if (!panel) return;
+    if (window.innerWidth >= 768) {
+      const isHidden = panel.classList.contains('md:hidden');
+      panel.classList.toggle('md:hidden', !isHidden);
+      panel.classList.toggle('md:flex', isHidden);
+    } else {
+      const isHidden = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !isHidden);
+      panel.classList.toggle('flex', isHidden);
+    }
+  },
+
+  renderExifPanel(photo) {
+    const body = document.getElementById('lightbox-exif-body');
+    if (!body || !photo) return;
+
+    const esc = (str) =>
+      String(str || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[ch]));
+
+    const exif = photo.exif || {};
+    const sizeMb = photo.size ? `${(photo.size / (1024 * 1024)).toFixed(2)} MB` : '-';
+    const dims = exif.width && exif.height ? `${exif.width} × ${exif.height} px` : '-';
+    const camera = [exif.cameraMake, exif.cameraModel].filter(Boolean).join(' ').trim() || '-';
+    const expStr = exif.exposureTime
+      ? (exif.exposureTime < 1 ? `1/${Math.round(1 / exif.exposureTime)}s` : `${exif.exposureTime}s`)
+      : '';
+    const camSpecs = [
+      exif.aperture ? `f/${exif.aperture}` : '',
+      expStr,
+      exif.isoSpeed ? `ISO ${exif.isoSpeed}` : '',
+      exif.focalLength ? `${exif.focalLength}mm` : '',
+      exif.flashUsed === true ? '⚡ Flash' : (exif.flashUsed === false ? 'Tanpa Flash' : ''),
+    ].filter(Boolean).join(' • ') || '-';
+
+    const row = (label, valHtml) => `
+      <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">${label}</div>
+        <div class="text-slate-100 font-medium mt-0.5 break-words">${valHtml}</div>
+      </div>
+    `;
+
+    const gpsHtml = photo.gps
+      ? `<a href="https://maps.google.com/?q=${photo.gps.lat},${photo.gps.lng}" target="_blank" class="text-emerald-400 underline font-mono-code">📍 ${photo.gps.lat.toFixed(6)}, ${photo.gps.lng.toFixed(6)}</a>` +
+        (photo.gps.alt !== null && photo.gps.alt !== undefined ? `<div class="text-[11px] text-slate-400 mt-0.5">Ketinggian: ${Math.round(photo.gps.alt)} m</div>` : '')
+      : '<span class="text-orange-400">⚠️ Tidak ada koordinat GPS</span>';
+
+    body.innerHTML = [
+      row('Nama File', esc(photo.name || '-')),
+      row('Waktu Potret Asli', `<span class="font-mono-code">${esc(photo.takenTime || '-')}</span>`),
+      row('Lokasi GPS', gpsHtml),
+      row('Perangkat / Kamera', esc(camera)),
+      row('Resolusi & Ukuran', `${esc(dims)} • ${esc(sizeMb)}`),
+      row('Setelan Kamera', esc(camSpecs)),
+      row('Catatan Proyek', esc(photo.caption || 'Belum ada catatan.')),
+    ].join('');
   },
 
   async openSplitCompare(twoPhotos) {

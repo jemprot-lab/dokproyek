@@ -349,7 +349,7 @@ function handleListPhotos(payload) {
     q: q,
     pageSize: 200,
     orderBy: 'name',
-    fields: 'files(id,name,size,mimeType,description,starred,thumbnailLink,webContentLink,createdTime,imageMediaMetadata(time,location(latitude,longitude)))'
+    fields: 'files(id,name,size,mimeType,description,starred,thumbnailLink,webContentLink,createdTime,imageMediaMetadata(time,width,height,cameraMake,cameraModel,exposureTime,aperture,isoSpeed,focalLength,flashUsed,lens,location(latitude,longitude,altitude)))'
   });
 
   var files = (response.files || []).map(function (f) {
@@ -367,8 +367,21 @@ function handleListPhotos(payload) {
       takenTime: meta.time || f.createdTime || '',
       gps: (loc.latitude !== undefined && loc.longitude !== undefined) ? {
         lat: loc.latitude,
-        lng: loc.longitude
-      } : null
+        lng: loc.longitude,
+        alt: loc.altitude !== undefined ? loc.altitude : null
+      } : null,
+      exif: {
+        width: meta.width || null,
+        height: meta.height || null,
+        cameraMake: meta.cameraMake || '',
+        cameraModel: meta.cameraModel || '',
+        exposureTime: meta.exposureTime || null,
+        aperture: meta.aperture || null,
+        isoSpeed: meta.isoSpeed || null,
+        focalLength: meta.focalLength || null,
+        flashUsed: meta.flashUsed,
+        lens: meta.lens || ''
+      }
     };
   });
 

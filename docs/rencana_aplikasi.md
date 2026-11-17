@@ -543,13 +543,13 @@ Bagian ini merangkum seluruh penyesuaian dan penyempurnaan dari rencana awal hin
    * Proxy `GET_PHOTO_BLOB` mendukung mode `preview: true` (mengambil versi ringan `=w1200` ~100–200 KB) sehingga preview Lightbox tampil jauh lebih cepat.
    * Magic Link mendukung hak akses bertingkat (penuh per proyek atau spesifik per sub-folder keterangan), proteksi `LIST_PHOTOS`, serta `formatWibDateTimeStr()` agar format batas waktu pada pesan WhatsApp rapi (`dd-MM-yyyy HH:mm`).
 
-### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v24`)
+### C. Web App & PWA Viewer (`web-app-viewer/`, Service Worker `dokproyek-pwa-v25`)
 1. **Navigasi & Pencarian Instan:**
    * Pencarian proyek/keterangan (termasuk nama pengirim/uploader untuk Admin) berjalan instan di memori (`filterProjectsLocally()`), bebas *race condition* saat mengetik/menghapus teks.
    * Klik nama proyek menampilkan kartu **Folder Keterangan** terlebih dahulu (`renderSubFolderCards()`) sebelum memuat foto; tersedia tombol hapus proyek/folder khusus Admin serta badge pengirim **`👤 username`** khusus Admin per folder keterangan (bersumber dari metadata Drive + fallback `Audit_Logs`, tersembunyi dari tamu Magic Link).
    * Responsif di layar HP dengan tombol drawer **📂 Proyek** (`md:hidden`), bar *pill* geser horizontal **`#mobile-project-switcher`** saat tersedia lebih dari 1 proyek (termasuk Magic Link multi-proyek), `env(safe-area-inset-*)`, splash `manifest.json` selaras `#F8FAFC`, dan format tanggal Indonesia pada `#magic-banner`.
 2. **Preview Cepat, Spinner, & Pop-up Modern (`ui-feedback.js` & `lightbox-workstation.js`):**
-   * Preview Lightbox memakai `GET_PHOTO_BLOB` mode `preview: true` (`=w1200`), thumbnail instan, spinner `#lightbox-spinner`, *prefetch* foto kiri/kanan di background, serta dukungan sentuhan penuh di HP (**pinch-to-zoom 2 jari `100%–500%`**, **geser 1 jari saat zoom**, **double-tap zoom `2.5x`**, dan **swipe kiri/kanan** saat `100%`).
+   * Preview Lightbox memakai `GET_PHOTO_BLOB` mode `preview: true` (`=w1200`), thumbnail instan, spinner `#lightbox-spinner`, *prefetch* foto kiri/kanan di background, **panel Info & Data EXIF 25% di sebelah kiri** (`#lightbox-exif-panel` di desktop / drawer `ℹ️ EXIF` di HP: waktu potret, GPS + link Maps, merk/tipe kamera, resolusi, ISO/aperture/exposure), serta dukungan sentuhan penuh di HP (**pinch-to-zoom 2 jari `100%–500%`**, **geser 1 jari saat zoom**, **double-tap zoom `2.5x`**, dan **swipe kiri/kanan** saat `100%`).
    * Spinner loading global otomatis muncul saat menunggu respons server (`callGasApi`).
    * Seluruh `alert()`, `confirm()`, `prompt()` diganti modal dialog & toast modern; tersedia pop-up peringatan kuota `>= 85%` atau masa aktif `<= 7 hari` (klik **OK** untuk lanjut memakai aplikasi).
 3. **Magic Link Bertingkat & Modal WhatsApp (`admin-manager.js` & `export-engine.js`):**
